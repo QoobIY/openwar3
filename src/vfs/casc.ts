@@ -355,6 +355,7 @@ interface Entry {
 
 export class CascDataSource implements DataSource {
   readonly label: string;
+  locale = "";
   /** Lower-cased logical path → entry. Built lowest-archive-first so a later layer wins. */
   private entries = new Map<string, Entry>();
   /** Path as the root spells it, for `list()`. */
@@ -428,6 +429,7 @@ export class CascDataSource implements DataSource {
     index: Map<string, Location>,
     locale: string,
   ): void {
+    this.locale = locale;
     for (const template of ARCHIVE_ORDER) {
       const archive = template.replace("%s", locale);
       const list = byArchive.get(archive);

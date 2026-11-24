@@ -1,30 +1,3 @@
-// The one place a logical asset path becomes bytes for the match's viewer — the "path solver"
-// mdx-m3-viewer calls for every model and texture the scene loads (MapViewerScene.create).
-//
-// Three layers, first hit wins:
-//
-//   1. the running MAP's archive. A map's imported art (`war3mapImported\Santa.mdx` and the
-//      textures it names) is inside the .w3x and nowhere else, and the search order puts the
-//      map first — the viewer's own map handler does exactly that for the units the map PLACES
-//      (`pathSolver` in handlers/w3x/map.js). Without this layer a pre-placed custom hero looked
-//      right while every unit a trigger created or a shop sold came out with no model, no body
-//      and so no command card at all (Test of Balance's drafted heroes). The audio half is
-//      SoundBoard.mountMap.
-//   2. the map's TILESET archive (issue #152). Cliff faces, water frames and ubersplats are one
-//      path per set and one SET PER TILESET, told apart by the archive they sit in — see
-//      vfs/tileset.ts. The viewer hands the tileset letter down with every load the map handler
-//      makes, its own models and their textures included.
-//   3. the install.
-//
-// Every path resolves to a STABLE, cached blob-url string — never a Promise<bytes>. This is the
-// load-time win behind issue #14: the viewer only DEDUPES a resource when the solver hands it a
-// string it can key its promiseMap/resourceMap on. A Promise (what `vfs.read()` returns) sends
-// the load down the viewer's __DIRECT_LOAD path, which mints a unique id and parses a *fresh*
-// resource EVERY call — so a map with hundreds of trees all referencing one LordaeronTree.mdx
-// re-read and re-parsed that model once per tree, the dominant cost of map init. One blob url
-// per path (tracked in `created` for revocation) means each shared model/texture is fetched
-// once and parsed exactly once.
-
 import type { DataSource } from "../vfs/types";
 import { tilesetOverlay } from "../vfs/tileset";
 
@@ -45,29 +18,53 @@ export interface MapFileLayer {
  * @param created every blob URL minted, in order — the scene revokes them.
  */
 export function createAssetSolver(vfs: DataSource, mapFiles: MapFileLayer, baseUrls: Map<string, string>, created: string[]): Solver {
-  const blobUrls = new Map<string, string | null>();
+  const blobUrls = new Map<string, string>();
+  const pending = new Map<string, Promise<string | null>>();
   const overlay = tilesetOverlay(vfs);
-  const mint = (key: string, read: () => Uint8Array | null): string | null => {
+  const mint = (key: string, bytes: Uint8Array): string => {
     let url = blobUrls.get(key);
     if (url === undefined) {
-      const bytes = read(); // MPQ decode is synchronous (mpq.ts)
-      url = bytes ? URL.createObjectURL(new Blob([bytes as BlobPart])) : null;
+      url = URL.createObjectURL(new Blob([bytes as BlobPart]));
       blobUrls.set(key, url);
-      if (url) created.push(url);
+      created.push(url);
     }
     return url;
   };
+  const mintAsync = (key: string, read: () => Promise<Uint8Array | null>): Promise<string | null> => {
+    const cached = blobUrls.get(key);
+    if (cached) return Promise.resolve(cached);
+    let promise = pending.get(key);
+    if (!promise) {
+      promise = read().then((bytes) => bytes ? mint(key, bytes) : null).catch(() => null);
+      pending.set(key, promise);
+    }
+    return promise;
+  };
+  const prefersGltf = (source: DataSource, path: string): boolean => /\.mdx$/i.test(path) && source.exists(path.replace(/\.mdx$/i, ".gltf"));
+  const fromInstall = (logical: string, tileset?: string): unknown => {
+    const { key, source, path } = overlay(logical, tileset);
+    const cached = baseUrls.get(key);
+    if (cached) return cached;
+    if (prefersGltf(source, path)) return mintAsync(key, () => source.read(path.replace(/\.mdx$/i, ".gltf")));
+    const bytes = source.rawBytes(path);
+    if (bytes) return mint(key, bytes);
+    if (source.exists(path)) return mintAsync(key, () => source.read(path));
+    return srcFallback(logical);
+  };
+  const srcFallback = (logical: string): string => logical;
   return (src, params) => {
-    if (typeof src !== "string") return src; // in-memory loads pass through
+    if (typeof src !== "string") return src;
     const logical = src.replace(/\//g, "\\");
     const map = mapFiles.archive;
     if (map) {
-      const url = mint(`map${mapFiles.epoch}:${logical.toLowerCase()}`, () => map.rawBytes(logical));
-      if (url) return url;
+      const key = `map${mapFiles.epoch}:${logical.toLowerCase()}`;
+      if (prefersGltf(map, logical)) return mintAsync(key, () => map.read(logical.replace(/\.mdx$/i, ".gltf")));
+      const bytes = map.rawBytes(logical);
+      if (bytes) return mint(key, bytes);
+      if (map.exists(logical)) {
+        return mintAsync(key, () => map.read(logical)).then((url) => url ?? fromInstall(logical, params?.tileset));
+      }
     }
-    const { key, source, path } = overlay(logical, params?.tileset);
-    const cached = baseUrls.get(key);
-    if (cached) return cached; // preloaded base SLKs
-    return mint(key, () => source.rawBytes(path)) ?? src; // string ⇒ the viewer caches+dedupes by this url
+    return fromInstall(logical, params?.tileset);
   };
 }

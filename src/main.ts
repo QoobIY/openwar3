@@ -80,19 +80,16 @@ import { loadMapBytes } from "./world/map";
 import { readMapBytes } from "./vfs/mapArchive";
 import { LayeredDataSource } from "./vfs/layered";
 import { MpqDataSource } from "./vfs/mpq";
+import { GltfDataSource } from "./vfs/gltf";
 import { ModelViewerScene, type SequenceInfo } from "./render/modelViewer";
 import { MapViewerScene, lastRecordedReplay } from "./render/mapViewer";
 import { matchLinkFrom, type MatchLinkSetup } from "./game/matchLink";
 import { LoadGate } from "./game/loadGate";
 import { MenuScene } from "./render/menuScene";
-import { applyMenuCursor } from "./ui/cursor";
-import { applyGameFont } from "./ui/gameFont";
-import { setGameTipSkin } from "./ui/gameTip";
-import { tooltipSkinVars } from "./ui/hud";
-import { blpToCanvas } from "./render/blputil";
+import { applyOpenWar3Theme } from "./ui/openwar3Theme";
 
 // Entry point (plan §6). WebGL scenes, one visible at a time:
-//   #menubg — the animated main-menu glue scene (issue #54), behind the FDF menu
+//   #menubg — optional 3D background (the native menu theme does not require one)
 //   #bg     — Phase 2 placeholder terrain (WebGL2), the zero-asset fallback
 //   #model  — Phase 3 single animated MDX unit (mdx-m3-viewer)
 //   #map    — authentic full map + our sim (War3MapViewer)
@@ -155,7 +152,6 @@ function placeholderTerrain(): TerrainScene {
 let modelScene: ModelViewerScene | null = null;
 let mapScene: MapViewerScene | null = null;
 let menuScene: MenuScene | null = null;
-let menuDebug: { dispose(): void } | null = null;
 // The page's audio. Built once the archives are mounted (every sound is read out of them)
 // and handed on to the match, so the menu and the game share one AudioContext.
 let sounds: SoundBoard | null = null;
@@ -183,31 +179,11 @@ function show(which: Which): void {
   if (which !== "map") mapScene?.stop();
 }
 
-/** Show the animated main-menu 3D scene behind the menu (built on first use). Falls
- *  back to an empty background if the glue model is missing/fails to load. */
 async function showMenuBackground(vfs: DataSource | null): Promise<void> {
-  if (!vfs) { show("none"); return; }
-  try {
-    if (!menuScene) {
-      menuScene = new MenuScene(menuBgCanvas, vfs);
-      // The panel chrome's slide carries its own whooshes as SND events keyed into the clip
-      // (ui/glueAudio.ts) — play them as they come due.
-      menuScene.onSound = (code) => glueAudio?.event(code);
-      await menuScene.load();
-    }
-    show("menubg");
-    menuScene.start();
-    glueAudio?.start(); // the main-screen theme + the wind under it
-    // Opt-in on-screen framing controls (?menudebug) — tune the camera/panel, then
-    // "Log values" to print numbers to bake into MenuScene.tuning.
-    if (menuScene && !menuDebug && new URLSearchParams(location.search).has("menudebug")) {
-      const { mountMenuDebug } = await import("./ui/menuDebug");
-      menuDebug = mountMenuDebug(ui, menuScene);
-    }
-  } catch (err) {
-    console.warn("[OpenWar3] main-menu 3D scene unavailable:", err);
-    show("none"); // empty background
-  }
+  menuScene?.stop();
+  menuScene = null;
+  show("none");
+  if (vfs) glueAudio?.start();
 }
 
 /** Load a map's bytes into the right scene (authentic with an install, else placeholder). */
@@ -575,7 +551,7 @@ function singlePlayerScreen(vfs: DataSource): GlueScreenDef {
     sides: singlePlayerSides,
     // The default hand comes back HERE rather than when Back was clicked — under the black, with
     // the campaign screen already gone (GlueScreenDef.onArrived).
-    onArrived: () => applyMenuCursor(vfs),
+    onArrived: () => applyOpenWar3Theme(vfs),
     mount: () => mountSinglePlayerMenu(ui, vfs, {
       onCampaign: () => void openCampaignScreen(vfs),
       onCustomCampaign: () => void glue.goTo(customCampaignScreen(vfs)),
@@ -668,7 +644,7 @@ function campaignScreen(vfs: DataSource): GlueScreenDef {
       : undefined,
     // The campaign's own racial cursor, put on under the black once the backdrop is up — not
     // while the player is still looking at the screen they are leaving (see onArrived).
-    onArrived: () => applyMenuCursor(vfs, state.campaign.cursor),
+    onArrived: () => applyOpenWar3Theme(vfs, state.campaign.cursor),
     mount: () => {
       setCampaignAmbience(state.campaign);
       return mountCampaignScreen(ui, vfs, campaigns, state, {
@@ -725,7 +701,7 @@ async function startCampaignMission(vfs: DataSource, c: Campaign, index: number,
     return;
   }
   leaveCampaignScreen();
-  applyMenuCursor(vfs); // no glue screen arrives after this one — see leaveCampaignScreen
+  applyOpenWar3Theme(vfs); // no glue screen arrives after this one — see leaveCampaignScreen
   const info = parseMapInfo(bytes, mission.name);
   // The mission is finished the moment its own script declares victory — that is what opens
   // the next chapter (data/campaignProgress.ts).
@@ -951,7 +927,7 @@ async function startCredits(vfs: DataSource): Promise<void> {
     console.warn(`[OpenWar3] credits map missing from this install: ${path}`);
     return;
   }
-  applyMenuCursor(vfs); // no glue screen arrives after this one — the match does
+  applyOpenWar3Theme(vfs); // no glue screen arrives after this one — the match does
   const info = parseMapInfo(bytes, "Credits");
   pendingCampaign = null;
   await startGame(bytes, info, campaignConfig(info, "normal", info.name || "Credits"), undefined, undefined, path);
@@ -1339,7 +1315,7 @@ async function showLoadingScreen(info: MapInfo, config: MeleeConfig, map: Uint8A
   // picture there; read from the install alone, we showed Blizzard's.
   let vfs: DataSource = install;
   try {
-    vfs = new LayeredDataSource([new MpqDataSource("map", map), install]);
+    vfs = new LayeredDataSource([new GltfDataSource(new MpqDataSource("map", map)), install]);
   } catch (err) {
     console.warn("[OpenWar3] loading screen: map archive unreadable, using the install's art:", err);
   }
@@ -1620,15 +1596,7 @@ function mountInstall(load: GateLoad): void {
   ((window as unknown as { openwar3: Record<string, unknown> }).openwar3 ??= {}).vfs = load.vfs;
   gate?.dispose();
   gate = null;
-  applyMenuCursor(load.vfs); // WC3 human hand cursor in the menus
-  applyGameFont(load.vfs); // Friz Quadrata TT, out of the install's own Fonts\ (issue #72)
-  // Every `setGameTip` hover hint from here on wears the game's tooltip art (the command card's border strip
-  // and fill), menus included — the update prompt's release link is up before any screen that
-  // could otherwise have dressed it (src/ui/updatePrompt.ts).
-  setGameTipSkin(tooltipSkinVars((path) => {
-    const bytes = load.vfs.rawBytes(path);
-    return bytes ? blpToCanvas(bytes) : null;
-  }));
+  applyOpenWar3Theme();
   // Audio: every sound comes out of the archives, so this is the first moment it can exist.
   // The gate button the player just pressed is also the gesture that opens the browser's
   // autoplay gate, so the theme can start with the menu.

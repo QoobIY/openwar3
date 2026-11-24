@@ -3,8 +3,9 @@ import {
   downloadInstall, gameFilesSources, gb, storedInstall, type DownloadProgress, type GameFilesSource,
 } from "../assets/downloadInstall";
 import { cancelNativeDownload, downloadNativeInstall, isDesktopApp, loadNativeInstall, pickNativeInstall, rememberedInstall } from "../assets/nativeInstall";
+import { loadMediaInstall } from "../assets/mediaInstall";
 import { loadProfile } from "../vfs/loader";
-import { RECOMMENDED_INSTALL, wrongVersionMessage } from "../vfs/version";
+import { wrongVersionMessage } from "../vfs/version";
 import { DEFAULT_PROFILE } from "../vfs/profiles";
 import type { DataSource } from "../vfs/types";
 import { bindHotkeys, createGlueButton, createPanel, createProgressBar } from "@openwar3/ui/dom";
@@ -61,16 +62,11 @@ export function mountLoadGate(root: HTMLElement, onLoaded: (r: GateLoad) => void
 
   const title = document.createElement("h1");
   title.className = "ow3-heading load-gate-title";
-  title.textContent = "OpenWar3";
+  title.textContent = "Warcraft III";
 
   const sub = document.createElement("p");
   sub.className = "load-gate-sub";
-  // Any classic Warcraft III will do (issue #319): the mount brings every build's game data to
-  // the same patch (src/vfs/normalize.ts), so what is NAMED here is the one a player can still
-  // get — the Legacy install Battle.net offers to everybody who owns the game.
-  sub.textContent = native
-    ? `Select your Warcraft III folder. We recommend ${RECOMMENDED_INSTALL}; any classic install up to 1.31.1 with The Frozen Throne works, and its game data is brought to the current patch for you. You will only be asked once: the game remembers where it is. Nothing is uploaded; your install is read from your own disk.`
-    : `Select your Warcraft III folder to begin. We recommend ${RECOMMENDED_INSTALL}; any classic install up to 1.31.1 with The Frozen Throne works, and its game data is brought to the current patch for you. The menu is built from the game's own files, so they're loaded first. Nothing is uploaded — your install is read locally in the browser.`;
+  sub.textContent = "Select your Warcraft III folder. Your local game files are used; nothing is uploaded.";
 
   /** What the button says when it is not busy. The desktop app changes it once — a player who
    *  is being asked a SECOND time is choosing a folder, not loading files — so a failure has to
@@ -331,15 +327,17 @@ export function mountLoadGate(root: HTMLElement, onLoaded: (r: GateLoad) => void
     });
   }
 
-  // The browser's twin of that: a copy an earlier "Download game files" left in this origin's
-  // storage is this browser's install, so it is mounted without asking — the same as the desktop
-  // app's remembered folder, and for the same reason.
-  if (!native && downloadable) {
+  if (!native) {
     btn.setDisabled(true);
-    void storedInstall().then((install) => {
-      if (install) return mount(install);
+    void (async () => {
+      const media = await loadMediaInstall().catch(() => null);
+      if (media) return mount(media);
+      if (downloadable) {
+        const install = await storedInstall();
+        if (install) return mount(install);
+      }
       btn.setDisabled(false);
-    });
+    })();
   }
 
   return {

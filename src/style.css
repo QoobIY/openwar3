@@ -4811,14 +4811,6 @@ body.in-game .load-gate { display: none; }
 }
 .menu-debug-btn:hover { filter: brightness(1.08); }
 
-/* The inventory cover — the crest the console wears when the selection has no pockets.
-   Drawn at its own aspect over that corner of the band (CONSOLE_INVENTORY_COVER in
-   ui/hud.ts), so the texture is never stretched. */
-.hud-inventory-cover {
-  background: var(--hud-inventory-cover) 0 0 / 100% 100% no-repeat;
-  pointer-events: none;
-}
-
 /* Voice chat (issue #133): one plate per player talking, stacked upward from the console's top
    edge down the right side. right/bottom/width and --voice-h/--voice-gap come from ui/hud.ts
    (VOICE_AREA). The plate's colour is --voice-tint — the speaker's tint in the current Ally Color
@@ -4962,3 +4954,599 @@ body.in-game .load-gate { display: none; }
 .voice-tag-num[hidden] { display: none; }
 /* The one(s) selected: brighter, ringed — "you now hold Fiend 4". */
 .voice-tag.selected { background: rgba(0, 0, 0, 0.8); color: #fff; box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.55); }
+
+
+/* OpenWar3 native interface. Layout and game icons stay; decorative chrome is CSS. */
+:root {
+  --ow3-bg: #080d13;
+  --ow3x-panel: rgba(15, 24, 34, 0.94);
+  --ow3x-panel-soft: rgba(20, 31, 43, 0.88);
+  --ow3x-panel-solid: #111c27;
+  --ow3-border: rgba(135, 165, 184, 0.28);
+  --ow3-border-strong: rgba(103, 211, 197, 0.72);
+  --ow3-accent: #67d3c5;
+  --ow3-accent-soft: rgba(103, 211, 197, 0.16);
+  --ow3-text: #e7eef3;
+  --ow3-muted: #9bafbd;
+  --ow3-danger: #f2777c;
+  --ow3-warning: #e3b86b;
+  --ow3-radius: 8px;
+  --ow3-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+}
+
+body.ow3-ui {
+  font-family: "Segoe UI", "Noto Sans", "Nowar Sans", system-ui, sans-serif;
+  color: var(--ow3-text);
+  background: var(--ow3-bg);
+}
+
+body.ow3-ui,
+body.ow3-ui * {
+  cursor: default;
+}
+
+body.ow3-ui::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(47, 111, 124, 0.24), transparent 42%),
+    radial-gradient(circle at 82% 76%, rgba(44, 69, 107, 0.22), transparent 45%),
+    linear-gradient(145deg, #0c151f, #070b11 68%);
+}
+
+.ow3x-panel {
+  background: var(--ow3x-panel);
+  border: 1px solid var(--ow3-border);
+  border-radius: var(--ow3-radius);
+  box-shadow: var(--ow3-shadow);
+  backdrop-filter: blur(12px);
+}
+
+.ow3-button {
+  color: var(--ow3-text);
+  background: linear-gradient(180deg, rgba(43, 61, 77, 0.96), rgba(25, 39, 52, 0.96));
+  border: 1px solid var(--ow3-border);
+  border-radius: 6px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 80ms ease;
+}
+
+.ow3-button:hover,
+.ow3-button.pad-hover,
+.ow3-hoverable:hover,
+.ow3-hoverable.pad-hover {
+  border-color: var(--ow3-border-strong);
+  background: linear-gradient(180deg, rgba(51, 77, 91, 0.98), rgba(29, 51, 62, 0.98));
+  box-shadow: 0 0 0 1px rgba(103, 211, 197, 0.12), inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.ow3-button:active,
+.ow3-button.pressed {
+  transform: translateY(1px);
+  background: #142832;
+}
+
+.ow3-button.fdf-disabled,
+.ow3-button[aria-disabled="true"] {
+  color: #71828e;
+  border-color: rgba(110, 130, 143, 0.18);
+  background: rgba(24, 32, 40, 0.84);
+  box-shadow: none;
+}
+
+.ow3-button .fdf-simple-text-high,
+.ow3-button:hover .fdf-simple-text-normal {
+  color: var(--ow3-accent);
+}
+
+.ow3-widget {
+  color: var(--ow3-text);
+  background: rgba(8, 15, 22, 0.9);
+  border: 1px solid var(--ow3-border);
+  border-radius: 5px;
+}
+
+.ow3-widget input,
+.ow3-widget textarea,
+.ow3-widget .fdf-popup-title,
+.ow3-widget .fdf-list-item {
+  font-family: inherit;
+  color: inherit;
+}
+
+.ow3-widget input:focus-visible,
+.ow3-widget textarea:focus-visible {
+  border-color: var(--ow3-border-strong);
+}
+
+.ow3-check::before {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ow3-accent);
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(103, 211, 197, 0.4);
+}
+
+.ow3-highlight {
+  background: var(--ow3-accent-soft);
+}
+
+.ow3-ui ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.ow3-ui ::-webkit-scrollbar-track {
+  background: rgba(5, 11, 17, 0.6);
+  border-radius: 8px;
+}
+
+.ow3-ui ::-webkit-scrollbar-thumb {
+  background: #395264;
+  border: 2px solid #111c27;
+  border-radius: 8px;
+}
+
+.ow3-ui ::-webkit-scrollbar-thumb:hover {
+  background: var(--ow3-accent);
+}
+
+.ow3-ui .fdf-screen,
+.ow3-ui .fdf-topbar,
+.ow3-ui .load-gate {
+  color: var(--ow3-text);
+}
+
+.ow3-ui .fdf-frame {
+  scrollbar-color: #395264 #111c27;
+}
+
+.ow3-ui .fdf-btn-text,
+.ow3-ui .fdf-simple-text,
+.ow3-ui .load-gate-title {
+  letter-spacing: 0.01em;
+}
+
+.ow3-ui .load-gate {
+  background: transparent;
+}
+
+.ow3-ui .load-gate-panel {
+  min-width: min(560px, 88vw);
+  padding: 34px 38px;
+  background: var(--ow3x-panel);
+  border: 1px solid var(--ow3-border);
+  border-radius: 14px;
+  box-shadow: var(--ow3-shadow);
+}
+
+.ow3-ui .load-gate-title {
+  color: var(--ow3-accent);
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.ow3-ui .load-gate-sub {
+  color: var(--ow3-muted);
+  line-height: 1.55;
+}
+
+.ow3-ui .load-gate-progress {
+  accent-color: var(--ow3-accent);
+}
+
+.ow3-ui .hud-console-background,
+.ow3-ui .hud-console {
+  background: linear-gradient(180deg, rgba(17, 28, 39, 0.97), rgba(9, 16, 24, 0.98));
+  border: 1px solid var(--ow3-border);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.32);
+}
+
+.ow3-ui .hud-console {
+  padding: 0;
+}
+
+.ow3-ui .hud-minimap-view,
+.ow3-ui .hud-portrait,
+.ow3-ui .hud-info-text,
+.ow3-ui .hud-command,
+.ow3-ui .hud-inv-grid {
+  border: 1px solid var(--ow3-border);
+  border-radius: 6px;
+  background: rgba(4, 10, 16, 0.82);
+}
+
+.ow3-ui .hud-minimap-view {
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.ow3-ui .hud-info-text {
+  padding: 8px;
+}
+
+.ow3-ui .hud-portrait {
+  overflow: hidden;
+  background: #070d14;
+}
+
+.ow3-ui .hud-slot {
+  background: linear-gradient(145deg, rgba(31, 46, 59, 0.96), rgba(14, 25, 35, 0.96));
+  border: 1px solid rgba(135, 165, 184, 0.26);
+  border-radius: 5px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.ow3-ui .hud-slot:hover,
+.ow3-ui .hud-slot.pad-hover {
+  border-color: var(--ow3-border-strong);
+  box-shadow: 0 0 0 1px rgba(103, 211, 197, 0.16);
+}
+
+.ow3-ui .hud-slot:active,
+.ow3-ui .hud-slot.pressed {
+  transform: translateY(1px);
+  background: #142832;
+}
+
+.ow3-ui .hud-slot.empty {
+  background: rgba(7, 14, 21, 0.74);
+  border-color: rgba(135, 165, 184, 0.14);
+}
+
+.ow3-ui .hud-cmd.active {
+  border-color: var(--ow3-accent);
+  box-shadow: 0 0 0 1px var(--ow3-accent), 0 0 14px rgba(103, 211, 197, 0.24);
+}
+
+.ow3-ui .hud-cmd.modal,
+.ow3-ui .hud-hero-btn.modal {
+  border-color: var(--ow3-accent);
+  animation: ow3-pulse 1.8s ease-in-out infinite;
+}
+
+.ow3-ui .hud-count-badge,
+.ow3-ui .hud-count-badge:not(.plain) {
+  background: rgba(7, 14, 21, 0.92);
+  border: 1px solid var(--ow3-border);
+  border-radius: 4px;
+  color: var(--ow3-text);
+  font-weight: 600;
+}
+
+.ow3-ui .hud-count-badge.hud-hotkey-badge {
+  background: rgba(7, 14, 21, 0.9);
+  color: var(--ow3-accent);
+}
+
+.ow3-ui .hud-tooltip,
+.ow3-ui .game-tip,
+.ow3-ui .unit-hover-tooltip,
+.ow3-ui .hud-chatbar,
+.ow3-ui .dev-drawer,
+.ow3-ui .dev-concede,
+.ow3-ui .obs-panel {
+  background: var(--ow3x-panel) !important;
+  border: 1px solid var(--ow3-border) !important;
+  border-image: none !important;
+  border-radius: var(--ow3-radius) !important;
+  box-shadow: var(--ow3-shadow) !important;
+  color: var(--ow3-text);
+}
+
+.ow3-ui .hud-tooltip-title,
+.ow3-ui .hud-tooltip-desc,
+.ow3-ui .hud-sel-name,
+.ow3-ui .hud-sel-sub,
+.ow3-ui .hud-stat-text,
+.ow3-ui .hud-stat-label {
+  color: var(--ow3-text);
+}
+
+.ow3-ui .hud-tooltip-title b,
+.ow3-ui .hud-sel-sub,
+.ow3-ui .hud-stat-label {
+  color: var(--ow3-accent);
+}
+
+.ow3-ui .hud-tooltip-desc,
+.ow3-ui .hud-sel-stats,
+.ow3-ui .hud-sel-desc {
+  color: var(--ow3-muted);
+}
+
+.ow3-ui .hud-tooltip-cost .short,
+.ow3-ui .hud-error {
+  color: var(--ow3-danger);
+}
+
+.ow3-ui .hud-xpbar,
+.ow3-ui .hud-progress,
+.ow3-ui .obs-bar-track,
+.ow3-ui .hud-hero-bar {
+  background: rgba(5, 12, 18, 0.88);
+  border: 1px solid var(--ow3-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ow3-ui .hud-xpbar-fill,
+.ow3-ui .hud-progress-fill,
+.ow3-ui .obs-bar-fill,
+.ow3-ui .hud-hero-fill {
+  background: var(--ow3-accent);
+}
+
+.ow3-ui .hud-hp-value { color: #72da96; }
+.ow3-ui .hud-mp-value { color: #79a7f2; }
+
+.ow3-ui .hud-modal-fx,
+.ow3-ui .console-quest-fx,
+.ow3-ui .hud-herolevel-fx {
+  display: none !important;
+}
+
+.ow3-ui .hud-msgline,
+.ow3-ui .hud-chatline {
+  background: rgba(12, 21, 30, 0.72);
+  border-left: 2px solid var(--ow3-border);
+  border-radius: 3px;
+  padding-left: 6px;
+}
+
+.ow3-ui .hud-chat-input {
+  background: transparent;
+  color: var(--ow3-text);
+}
+
+.ow3-ui .hud-chat-prompt {
+  color: var(--ow3-accent);
+}
+
+.ow3-ui .hud-top-message {
+  background: var(--ow3x-panel);
+  border: 1px solid var(--ow3-border);
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+
+.ow3-ui .hud-inv-title {
+  color: var(--ow3-muted);
+}
+
+.ow3-ui .obs-minimap-buttons > button,
+.ow3-ui .hud-iconbtn {
+  background: linear-gradient(145deg, rgba(31, 46, 59, 0.96), rgba(14, 25, 35, 0.96));
+  border: 1px solid var(--ow3-border);
+  border-radius: 5px;
+}
+
+.ow3-ui .obs-sel-name,
+.ow3-ui .obs-panel-title,
+.ow3-ui .hud-match-clock {
+  color: var(--ow3-accent);
+}
+
+@keyframes ow3-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(103, 211, 197, 0.08); }
+  50% { box-shadow: 0 0 0 2px rgba(103, 211, 197, 0.28), 0 0 14px rgba(103, 211, 197, 0.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow3-ui *,
+  .ow3-ui *::before,
+  .ow3-ui *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+
+/* Fantasy detailing for the native UI: original vector ornaments, not game textures. */
+:root {
+  --ow3-fantasy-gold: #d5b66f;
+  --ow3-fantasy-gold-dim: rgba(213, 182, 111, 0.42);
+}
+
+.ow3x-panel {
+  background: linear-gradient(135deg, rgba(25, 40, 53, 0.96), rgba(9, 17, 26, 0.97));
+  border: 1px solid var(--ow3-fantasy-gold-dim);
+  box-shadow:
+    inset 0 0 24px rgba(72, 128, 137, 0.06),
+    0 14px 38px rgba(0, 0, 0, 0.38);
+}
+
+.fdf-screen > .ow3x-panel {
+  background:
+    linear-gradient(135deg, rgba(25, 40, 53, 0.96), rgba(9, 17, 26, 0.97)),
+    url("/ui/fantasy-rune.svg") right -34px top -42px / 190px 190px no-repeat;
+}
+
+.fdf-screen > .ow3x-panel::after,
+.load-gate-panel::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  z-index: 0;
+  background: url("/ui/fantasy-frame.svg") center / 100% 100% no-repeat;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.fdf-screen > .ow3x-panel > *,
+.load-gate-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ow3-button {
+  border-color: var(--ow3-fantasy-gold-dim);
+  background:
+    linear-gradient(180deg, rgba(53, 69, 80, 0.96), rgba(20, 34, 46, 0.98));
+  box-shadow:
+    inset 0 1px rgba(255, 239, 190, 0.07),
+    inset 0 -1px rgba(0, 0, 0, 0.35),
+    0 2px 5px rgba(0, 0, 0, 0.24);
+}
+
+.ow3-button:hover,
+.ow3-button.pad-hover,
+.ow3-hoverable:hover,
+.ow3-hoverable.pad-hover {
+  border-color: var(--ow3-fantasy-gold);
+  background: linear-gradient(180deg, rgba(64, 88, 96, 0.98), rgba(25, 48, 56, 0.98));
+  box-shadow:
+    0 0 12px rgba(103, 211, 197, 0.16),
+    inset 0 1px rgba(255, 239, 190, 0.13);
+}
+
+.ow3-button .fdf-simple-text-high,
+.ow3-button:hover .fdf-simple-text-normal {
+  color: #a6e9df;
+  text-shadow: 0 0 9px rgba(103, 211, 197, 0.34);
+}
+
+.ow3-ui .load-gate-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 48px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  color: var(--ow3-fantasy-gold);
+  background: linear-gradient(#f3e3b1, #c49b52 70%, #80602e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 16px rgba(213, 182, 111, 0.16);
+}
+
+.ow3-ui .load-gate-sub {
+  color: #b3c0c9;
+}
+
+.ow3-ui .load-gate-panel::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 18px;
+  height: 20px;
+  background: url("/ui/fantasy-divider.svg") center / 240px 20px no-repeat;
+  pointer-events: none;
+}
+
+.ow3-ui .hud-console-background,
+.ow3-ui .hud-console {
+  border-color: var(--ow3-fantasy-gold-dim);
+  background:
+    linear-gradient(180deg, rgba(27, 43, 56, 0.98), rgba(8, 15, 23, 0.99));
+  box-shadow:
+    inset 0 1px rgba(213, 182, 111, 0.13),
+    0 -12px 34px rgba(0, 0, 0, 0.42);
+}
+
+.ow3-ui .hud-minimap-view,
+.ow3-ui .hud-portrait,
+.ow3-ui .hud-info-text,
+.ow3-ui .hud-command,
+.ow3-ui .hud-inv-grid {
+  border-color: var(--ow3-fantasy-gold-dim);
+  background:
+    linear-gradient(145deg, rgba(20, 34, 46, 0.94), rgba(5, 12, 19, 0.94));
+  box-shadow: inset 0 0 18px rgba(49, 103, 113, 0.08);
+}
+
+.ow3-ui .hud-slot {
+  border-color: rgba(213, 182, 111, 0.32);
+  background:
+    linear-gradient(145deg, rgba(43, 57, 68, 0.97), rgba(15, 27, 38, 0.97));
+  box-shadow:
+    inset 0 1px rgba(255, 239, 190, 0.07),
+    inset 0 -1px rgba(0, 0, 0, 0.35);
+}
+
+.ow3-ui .hud-slot:hover,
+.ow3-ui .hud-slot.pad-hover {
+  border-color: var(--ow3-fantasy-gold);
+  box-shadow: 0 0 12px rgba(103, 211, 197, 0.18);
+}
+
+.ow3-ui .hud-cmd.active {
+  border-color: var(--ow3-fantasy-gold);
+  box-shadow: 0 0 0 1px var(--ow3-fantasy-gold), 0 0 16px rgba(213, 182, 111, 0.24);
+}
+
+.ow3-ui .hud-cmd.modal,
+.ow3-ui .hud-hero-btn.modal {
+  border-color: var(--ow3-fantasy-gold);
+}
+
+.ow3-ui .hud-count-badge,
+.ow3-ui .hud-count-badge:not(.plain) {
+  border-color: var(--ow3-fantasy-gold-dim);
+  background: rgba(12, 21, 30, 0.94);
+  color: #f0dfb4;
+}
+
+.ow3-ui .hud-tooltip,
+.ow3-ui .game-tip,
+.ow3-ui .unit-hover-tooltip,
+.ow3-ui .hud-chatbar,
+.ow3-ui .dev-drawer,
+.ow3-ui .dev-concede,
+.ow3-ui .obs-panel {
+  border-color: var(--ow3-fantasy-gold-dim) !important;
+  background:
+    linear-gradient(135deg, rgba(29, 45, 58, 0.97), rgba(10, 18, 27, 0.98)) !important;
+  box-shadow:
+    inset 0 0 22px rgba(72, 128, 137, 0.07),
+    0 12px 34px rgba(0, 0, 0, 0.42) !important;
+}
+
+.ow3-ui .hud-tooltip-title b,
+.ow3-ui .hud-sel-sub,
+.ow3-ui .hud-stat-label,
+.ow3-ui .hud-match-clock {
+  color: var(--ow3-fantasy-gold);
+}
+
+.ow3-ui .hud-xpbar,
+.ow3-ui .hud-progress,
+.ow3-ui .obs-bar-track,
+.ow3-ui .hud-hero-bar {
+  border-color: var(--ow3-fantasy-gold-dim);
+}
+
+.ow3-ui .hud-xpbar-fill,
+.ow3-ui .hud-progress-fill,
+.ow3-ui .obs-bar-fill,
+.ow3-ui .hud-hero-fill {
+  background: linear-gradient(90deg, #439e9a, #82ded0);
+}
+
+.ow3-ui .obs-minimap-buttons > button,
+.ow3-ui .hud-iconbtn {
+  border-color: var(--ow3-fantasy-gold-dim);
+}
+
+.ow3-clock::before {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  border: 1px solid var(--ow3-fantasy-gold-dim);
+  border-radius: 50%;
+  background:
+    linear-gradient(45deg, transparent 48%, var(--ow3-fantasy-gold) 49%, var(--ow3-fantasy-gold) 51%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, #67d3c5 49%, #67d3c5 51%, transparent 52%);
+  box-shadow: 0 0 10px rgba(213, 182, 111, 0.18);
+}

@@ -1,5 +1,6 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
 import { hotkeyMode } from "./hotkeys";
+import { decodeWar3Text } from "../vfs/textEncoding";
 
 // `CustomKeys.txt` — the player's own hotkeys and tooltips (issue #142).
 //
@@ -118,8 +119,8 @@ let parsed: CustomKeys | null = null;
 let source: string | null = null;
 
 /**
- * Writes a CustomKeys.txt back to the install it came from — windows-1252 bytes, the encoding
- * it is read in (customKeysDoc.ts `encodeAnsi`). Each install door brings its own, because each
+ * Writes a CustomKeys.txt back in the install's code page (customKeysDoc.ts `encodeAnsi`).
+ * Each install door brings its own writer, because each
  * reaches the folder differently: the browser's picker through its directory HANDLE, the desktop
  * app through its shell, the `?dev` boot through the dev server. Null for a door with no way to
  * write — a Firefox `<input webkitdirectory>` pick hands the page copies of the files and nothing
@@ -131,9 +132,9 @@ let writer: CustomKeysWriter | null = null;
 /** Hand the mounted install's CustomKeys.txt over, or null when the folder has none. Parsed
  *  eagerly so a malformed file costs nothing at the start of a match. `save` is the install
  *  door's way of writing it back, when it has one. */
-export function setCustomKeys(text: string | null, save: CustomKeysWriter | null = writer): void {
-  source = text;
-  parsed = text ? new CustomKeys(text) : null;
+export function setCustomKeys(data: string | Uint8Array | null, save: CustomKeysWriter | null = writer): void {
+  source = typeof data === "string" ? data : data ? decodeWar3Text(data) : null;
+  parsed = source ? new CustomKeys(source) : null;
   writer = save;
 }
 

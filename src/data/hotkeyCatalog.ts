@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import type { DataSource } from "../vfs/types";
 import { readIni, splitList, type IniSection } from "./customKeysDoc";
 import { parseWar3Skins, skinValue, WAR3SKINS } from "./war3skins";
@@ -105,7 +106,7 @@ const BUILD_CMD: Record<CatalogRace, string> = {
   human: "CmdBuildHuman", orc: "CmdBuildOrc", nightelf: "CmdBuildNightElf", undead: "CmdBuildUndead", neutral: "CmdBuild",
 };
 
-const decode = (bytes: Uint8Array): string => new TextDecoder("windows-1252").decode(bytes);
+const decode = (bytes: Uint8Array): string => decodeWar3Text(bytes);
 
 /** Strip WC3 colour markup, for a name built out of a Tip. */
 export const plainTip = (s: string): string => s.replace(/\|c[0-9a-f]{8}/gi, "").replace(/\|r/gi, "");

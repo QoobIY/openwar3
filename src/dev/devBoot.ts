@@ -26,6 +26,7 @@ import { MELEE_INSANE, MELEE_NEWBIE, MELEE_NORMAL } from "../ai/ids";
 import { edition, setEdition, type Edition } from "../data/edition";
 import { patchLevel, setPatchLevel } from "../patches";
 import { DirectLinks } from "../net/directLink";
+import { loadMediaInstall } from "../assets/mediaInstall";
 
 /**
  * Scripted boot for automated testing — the load gate without the human
@@ -233,7 +234,36 @@ export async function devBoot(hooks: DevBootHooks): Promise<void> {
 
   log("fetching manifest…");
   const res = await fetch("/wc3/manifest.json");
-  if (!res.ok) throw new Error("no dev install served — is OPENWAR3_INSTALL set?");
+  if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
+    const picked = await loadMediaInstall();
+    if (!picked) throw new Error("no dev install served — is OPENWAR3_INSTALL set?");
+    const load = await loadProfile(picked, DEFAULT_PROFILE, (msg) => log(msg));
+    hooks.mountInstall(load);
+    if (wantChapter) {
+      await hooks.startChapter(wantChapter, params.get("difficulty") ?? "normal");
+      return;
+    }
+    if (params.has("credits")) {
+      await hooks.startCredits();
+      return;
+    }
+    if (!wantMap) {
+      hooks.showMenu(load);
+      return;
+    }
+    const path = [...load.maps.keys()].find((name) => name.toLowerCase().includes(wantMap.toLowerCase()));
+    if (!path) throw new Error(`no map matching "${wantMap}" in media`);
+    const file = load.maps.get(path)!;
+    const info = parseMapInfo(new Uint8Array(await file.arrayBuffer()), path);
+    const lan = params.get("lan");
+    if (lan === "host" || lan === "join") {
+      if (params.get("direct") === "0") DirectLinks.enabled = false;
+      await devLanBoot(hooks, lan, path, info, file, seed, fog);
+      return;
+    }
+    await hooks.startGame(file, info, devConfig(info));
+    return;
+  }
   const manifest = (await res.json()) as InstallManifest;
 
   // Only the archives the profile actually mounts, plus the one map we intend to play. The

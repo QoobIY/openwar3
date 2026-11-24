@@ -32,7 +32,7 @@ export function mountMainMenu(
 
   const title = document.createElement("h1");
   title.className = "menu-title";
-  title.textContent = "OpenWar3";
+  title.textContent = "Warcraft III";
   panel.appendChild(title);
 
   const status = document.createElement("p");

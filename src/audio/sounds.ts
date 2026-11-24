@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import MdlxModel from "mdx-m3-viewer/dist/cjs/parsers/mdlx/model";
 import { parseWar3Skins, skinValue, WAR3SKINS } from "../data/war3skins";
 import { skinVersionSuffix } from "../data/edition";
@@ -455,7 +456,7 @@ export class SoundBoard {
     const bytes = this.vfs.rawBytes(path);
     if (!bytes) return null;
     const m = new MappedData();
-    m.load(new TextDecoder("windows-1252").decode(bytes));
+    m.load(decodeWar3Text(bytes));
     const index = new Map<string, string>();
     for (const k of Object.keys((m as unknown as { map: Record<string, unknown> }).map ?? {})) index.set(k.toLowerCase(), k);
     return { data: m, index };

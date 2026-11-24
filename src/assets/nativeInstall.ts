@@ -242,8 +242,8 @@ export async function loadNativeInstall(): Promise<PickedInstall> {
     }
   }
 
-  // The player's own hotkeys, if they keep any (issue #142) — text, not a handle: it is a few
-  // kilobytes and it is parsed at mount either way.
+  // The player's own hotkeys, if they keep any (issue #142) — bytes, not a handle: it is a few
+  // kilobytes and it is decoded and parsed at mount either way.
   const customKeys = manifest.customKeys ? await fetchInstallAnsi(fileUrl, manifest.customKeys) : null;
 
   // The hotkey editor's Save goes back through the SHELL, which knows the folder: the page has

@@ -129,8 +129,11 @@ const isMpq = (name: string): boolean => name.toLowerCase().endsWith(".mpq");
 export interface PickedInstall {
   files: InstallFiles;
   casc: CascFiles | null;
+  /** An unpacked media/ export mounted instead of an MPQ/CASC install. */
+  media?: boolean;
   /**
-   * The text of the folder's own `CustomKeys.txt`, or null when it has none (issue #142).
+   * The bytes of the folder's own `CustomKeys.txt`, or null when it has none (issue #142).
+   * Decoded after the mount identifies the install's code page.
    *
    * A loose file beside the exe rather than an archive entry, which is why it rides here
    * instead of arriving through the VFS like everything else the game reads. It is the player's
@@ -138,7 +141,7 @@ export interface PickedInstall {
    * the whole default set ready to edit — and it is read only when Options → Gameplay →
    * "Hotkeys:" is on Custom. See src/data/customKeys.ts.
    */
-  customKeys: string | null;
+  customKeys: Uint8Array | null;
   /**
    * Write a `CustomKeys.txt` back into the folder (issue #156, the hotkey editor's Save), or
    * absent when this pick cannot — see `CustomKeysWriter` in src/data/customKeys.ts.
@@ -165,12 +168,9 @@ export interface PickedInstall {
  */
 const CUSTOM_KEYS_PATHS = ["customkeys.txt", "customkeybindings\\customkeys.txt"];
 
-/** One of those files as TEXT. **windows-1252**, not UTF-8: it is a Warcraft III data file like
- *  every other `*Strings.txt`, and its tooltips are whatever the player's localized install
- *  writes — `File.text()` would mangle the first accented character in a German or French one
- *  into a replacement char and put it on a command button. */
-const readAnsi = async (file: File): Promise<string> =>
-  new TextDecoder("windows-1252").decode(await file.arrayBuffer());
+/** Localized data stays as bytes until the mounted install's code page is known. */
+const readAnsi = async (file: File): Promise<Uint8Array> =>
+  new Uint8Array(await file.arrayBuffer());
 
 /** `.build.info` is the marker of a CASC install; an MPQ-era folder has no such file. */
 const BUILD_INFO = ".build.info";
@@ -216,7 +216,7 @@ export async function pickInstall(): Promise<PickedInstall | null> {
 export async function readInstallDir(handle: DirHandle): Promise<PickedInstall> {
   const files: InstallFiles = new Map();
   const casc = emptyCasc();
-  let customKeys: string | null = null;
+  let customKeys: Uint8Array | null = null;
   /** Where the file was found, so a save goes back to the same place. */
   let keysDir: DirHandle = handle;
   let keysName = "CustomKeys.txt";
@@ -293,7 +293,7 @@ async function collectMaps(dir: DirEntry, prefix: string, into: InstallFiles): P
 
 /** The `CustomKeys.txt` inside a `CustomKeyBindings\\` folder, if it holds one — the second of
  *  the two places CustomKeyInfo.txt names (see CUSTOM_KEYS_PATHS). */
-async function customKeysIn(dir: DirEntry): Promise<{ text: string; name: string } | null> {
+async function customKeysIn(dir: DirEntry): Promise<{ text: Uint8Array; name: string } | null> {
   for await (const entry of dir.values()) {
     if (entry.kind === "file" && entry.name.toLowerCase() === CUSTOM_KEYS_PATHS[0]) {
       return { text: await readAnsi(await entry.getFile()), name: entry.name };
@@ -314,7 +314,7 @@ function pickViaInput(): Promise<PickedInstall | null> {
         if (!list || list.length === 0) return resolve(null);
         const files: InstallFiles = new Map();
         const casc = emptyCasc();
-        let customKeys: string | null = null;
+        let customKeys: Uint8Array | null = null;
         for (const file of Array.from(list)) {
           // webkitRelativePath is "<pickedFolder>/Maps/FrozenThrone/(2)EchoIsles.w3x";
           // drop the folder the user picked, and speak WC3's separator.

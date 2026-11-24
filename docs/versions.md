@@ -91,6 +91,9 @@ against anyway. `FINGERPRINTS` in src/patches/normalize/index.ts is the list.
   of the patch chain's tooltip `replace`s (docs/patches.md) are written against 1.30.4's wording
   and log "has no … to replace" on 1.29.2 (Critical Strike, Tranquility); seven on 1.21a. The
   NUMBERS those abilities play with are right; the sentence describing them is the old one.
+  Localized files are decoded as UTF-8 when their bytes are valid UTF-8. Single-byte files fall
+  back to windows-1251 for a `ruRU` store or detected Russian MPQ text, and windows-1252 otherwise
+  (`src/vfs/textEncoding.ts`).
 - **Scripts.** `common.j` / `Blizzard.j` are the build's own. An older one declares fewer natives
   and BJs; a map that calls a later one degrades as docs/map-compatibility.md describes.
 - **UI files.** The FrameDefs are the build's. See the gaps below.

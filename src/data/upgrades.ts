@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import { layCustomKeys } from "./customKeys";
 import type { DataSource } from "../vfs/types";
 
@@ -151,17 +152,17 @@ export function loadUpgradeRegistry(vfs: DataSource): UpgradeRegistry {
   const defs = new Map<string, UpgradeDef>();
   const bytes = vfs.rawBytes("Units\\UpgradeData.slk");
   if (!bytes) return new UpgradeRegistry(defs);
-  const data = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const data = new MappedData(decodeWar3Text(bytes));
 
   const funcs = new MappedData();
   for (const p of UPGRADE_FUNC_FILES) {
     const b = vfs.rawBytes(p);
-    if (b) funcs.load(new TextDecoder("windows-1252").decode(b));
+    if (b) funcs.load(decodeWar3Text(b));
   }
   const strs = new MappedData();
   for (const p of UPGRADE_STRING_FILES) {
     const b = vfs.rawBytes(p);
-    if (b) strs.load(new TextDecoder("windows-1252").decode(b));
+    if (b) strs.load(decodeWar3Text(b));
   }
   // The player's own file over both (data/customKeys.ts). An upgrade is the case CustomKeyInfo
   // spells out a comma list for — "[Rhme] Hotkey=X,Y,Z" is one key per RANK — and `csv` below

@@ -1,3 +1,5 @@
+import { encodeWar3Text } from "../vfs/textEncoding";
+
 // The hotkey editor's DOCUMENT — a `CustomKeys.txt` being edited, and the tables it is edited
 // against (issue #156).
 //
@@ -189,26 +191,12 @@ export class CustomKeysDoc {
 const fieldName = (f: string): string => f.charAt(0).toUpperCase() + f.slice(1);
 
 /**
- * Text → **windows-1252** bytes, the encoding the file is read in (assets/opfs.ts `readAnsi`).
- * `TextEncoder` only speaks UTF-8, and a UTF-8 "é" read back as 1252 is two characters of
- * mojibake on a French player's tooltip. The 0x80–0x9F block is the only part of 1252 that is
- * not Latin-1; anything outside the code page becomes "?".
+ * Text → bytes in the mounted install's code page. `TextEncoder` only speaks UTF-8, which
+ * Warcraft III's localized INI files do not read; anything outside the code page becomes "?".
  */
 export function encodeAnsi(text: string): Uint8Array {
-  const out = new Uint8Array(text.length);
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    out[i] = c < 0x80 || (c >= 0xa0 && c <= 0xff) ? c : CP1252[c] ?? 0x3f;
-  }
-  return out;
+  return encodeWar3Text(text);
 }
-
-const CP1252: Record<number, number> = {
-  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
-  0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e, 0x2018: 0x91,
-  0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02dc: 0x98,
-  0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f,
-};
 
 /** The gold every stock Tip gilds its hotkey letter in (`|cffffcc00M|rove`). */
 const GILD = "|cffffcc00";

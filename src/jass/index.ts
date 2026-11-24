@@ -10,6 +10,7 @@
 
 import type { DataSource } from "../vfs/types";
 import type { MpqDataSource } from "../vfs/mpq";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import { buildInterpreter } from "./headless";
 import type { Interpreter } from "./interpreter";
 import type { EngineHooks, LobbySlot, MapSetup } from "./runtime";
@@ -32,7 +33,7 @@ const decode = (b: Uint8Array): string => {
   try {
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(b);
   } catch {
-    return new TextDecoder("windows-1252").decode(b);
+    return decodeWar3Text(b);
   }
 };
 

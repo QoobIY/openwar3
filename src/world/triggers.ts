@@ -1,4 +1,5 @@
 import type { MpqDataSource } from "../vfs/mpq";
+import { decodeWar3Text } from "../vfs/textEncoding";
 
 // Reading a map's triggers (plan Phase 7 — this is the first step).
 //
@@ -60,9 +61,8 @@ export function readMapScript(mpq: MpqDataSource): MapScript {
   const lua = mpq.rawBytes("war3map.lua") ?? mpq.rawBytes("scripts\\war3map.lua");
   const bytes = jass ?? lua;
   const language: ScriptLanguage = jass ? "jass" : lua ? "lua" : "none";
-  // JASS/Lua source is ASCII with the odd Latin-1 byte in string literals;
-  // windows-1252 decodes it without throwing (matches slkText elsewhere).
-  const source = bytes ? new TextDecoder("windows-1252").decode(bytes) : "";
+  // Old single-byte scripts use the install's code page; UTF-8 scripts are handled by jass/index.ts.
+  const source = bytes ? decodeWar3Text(bytes) : "";
   const meleeFuncs = MELEE_INIT_FUNCS.filter((fn) => source.includes(fn));
   return {
     language,

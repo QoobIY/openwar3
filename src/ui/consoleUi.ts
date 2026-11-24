@@ -1,6 +1,7 @@
-// The in-game console — ALL of it — built from the game's own FrameDef: `ConsoleUI.fdf` for
-// the chrome, `UpperButtonBar.fdf` for the Quests/Menu/Allies/Chat buttons and
-// `ResourceBar.fdf` for the gold/lumber/supply/upkeep readout.
+import { decodeWar3Text } from "../vfs/textEncoding";
+
+// The in-game console's layout comes from `ConsoleUI.fdf`, `UpperButtonBar.fdf` and
+// `ResourceBar.fdf`. Its decorative chrome is OpenWar3's native CSS theme.
 //
 // `ConsoleUI.fdf` is ONE frame carrying two runs of `Texture`, told apart only by their own
 // anchors. The top edge is five slices:
@@ -488,7 +489,7 @@ export class ConsoleUi {
   private sideTile(): string | null {
     const bytes = this.vfs.rawBytes(WAR3SKINS);
     if (!bytes) return null;
-    const skins = parseWar3Skins(new TextDecoder("windows-1252").decode(bytes));
+    const skins = parseWar3Skins(decodeWar3Text(bytes));
     const tile = skinValue(skins, this.skin, "ConsoleTexture04") ?? skinValue(skins, "Default", "ConsoleTexture04");
     const m = tile ? /^(.*UITile0)4(\.blp)?$/i.exec(tile) : null;
     return m ? m[1] : null;

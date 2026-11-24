@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import type { DataSource } from "../vfs/types";
 
 // Lightning effects — WC3's link-two-points bolts (issue #97). Chain Lightning, Healing
@@ -68,7 +69,7 @@ export function loadLightningRegistry(vfs: DataSource): LightningRegistry {
   const defs = new Map<string, LightningDef>();
   const bytes = vfs.rawBytes(SLK);
   if (!bytes) return new LightningRegistry(defs);
-  const table = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const table = new MappedData(decodeWar3Text(bytes));
 
   for (const id of Object.keys(table.map)) {
     const r = table.getRow(id) as { string(key: string): string | undefined } | undefined;

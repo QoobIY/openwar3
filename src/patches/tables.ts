@@ -12,8 +12,8 @@
 //   • INI-shaped TXT (`*UnitFunc.txt`, `*Strings.txt`, `MiscGame.txt`): `[id]` sections of
 //     `Key=Value` lines.
 //
-// Everything here is pure text work on the file's bytes, read as windows-1252 — the encoding the
-// whole data layer decodes these files with (data/units.ts `TextDecoder("windows-1252")`).
+// Everything here is byte-preserving text work, independent of the code page used to display
+// localized strings later.
 
 /** A value a patch writes: a number or a string, exactly as the file would spell it (a string
  *  keeps its own quotes in a TXT, e.g. an Ubertip with a comma in it), `null` to REMOVE the cell

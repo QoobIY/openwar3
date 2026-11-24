@@ -12,6 +12,9 @@ import { DerivedArtDataSource } from "./derivedArt";
 import { FallbackArtDataSource } from "./fallbackArt";
 import { mpqEraBuild, NormalizeDataSource } from "./normalize";
 import { hasNormalization, loadNormalization } from "../patches/normalize";
+import { configureWar3TextEncoding } from "./textEncoding";
+import { GltfDataSource } from "./gltf";
+import { MediaDataSource } from "./media";
 
 // Turn a picked install into a mounted VFS (plan §1 exit: "enumerate/extract any file by path
 // from a real install").
@@ -50,19 +53,27 @@ export async function loadProfile(
   // the folder it remembered, and the scripted `?dev` boot — and a check that only one of them
   // runs is a check the others are exempt from. It is also why a player who patches Warcraft III
   // between launches is told on the next one.
-  const verdict = checkVersion(install);
-  if (!verdict.ok) throw new Error(verdict.message);
+  if (!install.media) {
+    const verdict = checkVersion(install);
+    if (!verdict.ok) throw new Error(verdict.message);
+  }
 
-  // The player's own `CustomKeys.txt` (issue #142), handed to the data layer HERE for the same
-  // reason the version gate is asked here: this is the one function all three doors pass
-  // through. It is a loose file in the folder rather than an archive entry, so it cannot arrive
-  // through the `DataSource` every other table is read from — see src/data/customKeys.ts.
-  setCustomKeys(install.customKeys, install.saveCustomKeys ?? null);
-  // …and the writer that keeps a map a LAN game hands us, in `Maps\Download\` — the same one
-  // door, for the same reason (src/assets/downloadedMaps.ts).
+  // The writer that keeps a map a LAN game hands us, in `Maps\Download\` — the same one door,
+  // for the same reason (src/assets/downloadedMaps.ts).
   setMapWriter(install.saveMap ?? null, install.askMapWrite ?? null);
 
   const maps = installMaps(install.files);
+
+  if (install.media) {
+    const media = await MediaDataSource.open(install.files, onProgress);
+    configureWar3TextEncoding(media);
+    setCustomKeys(install.customKeys, install.saveCustomKeys ?? null);
+    const derived = new DerivedArtDataSource(new EditionDataSource(new PatchDataSource(media)));
+    onProgress?.("Preparing icons…");
+    derived.prepare();
+    const vfs = new GltfDataSource(derived);
+    return { vfs, mounted: ["media"], missing: [], fileCount: media.list().length, maps, flavour: "media-1.30.4" };
+  }
 
   // Both storages are handed out through the EDITION overlay (src/vfs/edition.ts): while the
   // client is on Reign of Chaos, an object table with a `Melee_V0\` twin reads the twin. Wrapped
@@ -71,6 +82,8 @@ export async function loadProfile(
   // (the launcher's), and it is the archives beside them that are the game.
   if (isMpqEraInstall(install.files.keys())) {
     const mpq = await MpqEraDataSource.open(install.files, onProgress);
+    configureWar3TextEncoding(mpq);
+    setCustomKeys(install.customKeys, install.saveCustomKeys ?? null);
     const build = mpqEraBuild(mpq, mpq.mounted);
     if (!build.exact) {
       console.warn(`[install] this build's tables match no measured version — normalizing it as ${build.version}, the nearest with its archive layout (docs/versions.md)`);
@@ -81,9 +94,10 @@ export async function loadProfile(
     // …and our own remakes of the art this build lacks, UNDER everything that derives art, so a
     // drawn file is found before a stand-in is computed (src/vfs/fallbackArt.ts).
     const store = await FallbackArtDataSource.over(normalized);
-    const vfs = new DerivedArtDataSource(new EditionDataSource(new PatchDataSource(store)));
+    const derived = new DerivedArtDataSource(new EditionDataSource(new PatchDataSource(store)));
     onProgress?.("Preparing icons…");
-    vfs.prepare();
+    derived.prepare();
+    const vfs = new GltfDataSource(derived);
     const missing = profile.archives.filter((a) => !mpq.mounted.some((m) => m.toLowerCase() === a));
     const flavour = `mpq-${build.version}${build.exact ? "" : "~"}-normalized`;
     return { vfs, mounted: mpq.mounted, missing, fileCount: mpq.list().length, maps, flavour };
@@ -91,6 +105,8 @@ export async function loadProfile(
 
   if (isCascInstall(install.casc)) {
     const casc = await CascDataSource.open(install.casc, onProgress);
+    configureWar3TextEncoding(casc, casc.locale);
+    setCustomKeys(install.customKeys, install.saveCustomKeys ?? null);
     // A 1.31.1 store (the Internet Archive's copy "Download game files" falls back on) has its
     // game data put back to 1.30.4's before anything reads it (src/vfs/normalize.ts) — UNDER the
     // patches, so they land on the same tables a 1.30.4 install has.
@@ -103,9 +119,10 @@ export async function loadProfile(
     // which a 1.31.1 store has just been turned back into.
     // …and, over everything, the icons the tables name and the install lacks, derived from the
     // ones it has (src/vfs/derivedArt.ts, docs/icons.md) — computed here, once, after the mount.
-    const vfs = new DerivedArtDataSource(new EditionDataSource(new PatchDataSource(store)));
+    const derived = new DerivedArtDataSource(new EditionDataSource(new PatchDataSource(store)));
     onProgress?.("Preparing icons…");
-    vfs.prepare();
+    derived.prepare();
+    const vfs = new GltfDataSource(derived);
     // A 1.31 store carries its maps INSIDE (vfs/casc.ts `storeMaps`) and its folder has no
     // `Maps\` — the Internet Archive's copy is just the store. A loose file of the same name
     // wins, as the player's own folder always does.

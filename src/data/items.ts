@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import { layCustomKeys } from "./customKeys";
 import type { DataSource } from "../vfs/types";
 
@@ -184,14 +185,14 @@ export function loadItemRegistry(vfs: DataSource): ItemRegistry {
   const defs = new Map<string, ItemDef>();
   const bytes = vfs.rawBytes("Units\\ItemData.slk");
   if (!bytes) return new ItemRegistry(defs);
-  const data = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const data = new MappedData(decodeWar3Text(bytes));
 
   const func = new MappedData();
   const fb = vfs.rawBytes("Units\\ItemFunc.txt");
-  if (fb) func.load(new TextDecoder("windows-1252").decode(fb));
+  if (fb) func.load(decodeWar3Text(fb));
   const strs = new MappedData();
   const sb = vfs.rawBytes("Units\\ItemStrings.txt");
-  if (sb) strs.load(new TextDecoder("windows-1252").decode(sb));
+  if (sb) strs.load(decodeWar3Text(sb));
   // The player's own file over both (data/customKeys.ts) — an item's row is a SHOP button, so
   // this is what moves "Purchase Potion of Healing" onto another key and another slot.
   layCustomKeys(strs, func);

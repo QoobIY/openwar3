@@ -28,7 +28,6 @@ import type { HudDriver, HudSelection } from "./hud";
 import type { ObserverHero, ObserverIcon, ObserverPlayerView } from "../game/observerView";
 import { OBSERVER_MAX_HEROES } from "../game/observerView";
 import { setGameTip } from "./gameTip";
-import { ninePatch } from "./ninePatch";
 import { ReplayPanel } from "./replayPanel";
 import { wc3ToHtml, escapeHtml } from "./wc3Text";
 import { UI_HEIGHT } from "./fdf/layout";
@@ -559,20 +558,7 @@ export class ObserverHud {
   /** The Esc menu's backdrop and the pulldown arrow, handed to the stylesheet. The panels
    *  wear the tooltip frame hud.ts has already put on `:root`. */
   private applySkin(): void {
-    const d = this.driver;
-    const border = ninePatch(d.blpCanvas(d.skinPath("EscMenuButtonBorder")));
-    const fill = d.blpUrl(d.skinPath("EscMenuButtonBackground"));
-    const menuFill = d.blpUrl(d.skinPath("EscMenuEditBoxBackground"));
-    const arrow = d.blpUrl(d.skinPath("EscMenuPopupMenuArrow"));
-    const s = this.root.style;
-    if (border) {
-      s.setProperty("--obs-esc-border", `url(${border.url})`);
-      s.setProperty("--obs-esc-slice", String(border.tile));
-    }
-    if (fill) s.setProperty("--obs-esc-fill", `url(${fill})`);
-    if (menuFill) s.setProperty("--obs-esc-menu-fill", `url(${menuFill})`);
-    if (arrow) s.setProperty("--obs-esc-arrow", `url(${arrow})`);
-    this.root.classList.toggle("skinned", !!(border && fill));
+    this.root.classList.add("ow3-observer");
   }
 
   /** At the info panel's rate: every reading here moves at the speed of a number, not a frame. */

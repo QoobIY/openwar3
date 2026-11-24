@@ -31,6 +31,7 @@ import { anyModalOpen } from "./modal";
 import { ObserverHud, OBS, clock as matchClockText, type ObserverSeat } from "./observerHud";
 import { REPLAY_SPEEDS } from "./replayPanel";
 import { gridCommandKey, gridCommandSlot, gridHotkeys, gridInventoryKey, gridInventorySlot, hotkeyMode, hotkeysOnButtons } from "../data/hotkeys";
+import { applyOpenWar3Theme } from "./openwar3Theme";
 
 /** Which upkeep band a food count falls in: 0 none, 1 low, 2 high — at the bands of this match
  *  (gameplayConstants `upkeepBands`: the edition's, or the map's war3mapMisc.txt). Shared with
@@ -716,7 +717,6 @@ const INVENTORY_GAP = { col: 12.5 / 167.5, row: 9.5 / 251.5 } as const;
  * measurements that happened to meet. It stands taller than the band; the overhang is the
  * texture's transparent top third.
  */
-const CONSOLE_INVENTORY_COVER = { x: 0.4732, y: 0, w: 0.1263, h: 0.2545 } as const;
 
 /** Is the keystroke going into a text field rather than at the game? */
 export function isTyping(target: EventTarget | null): boolean {
@@ -783,7 +783,6 @@ const GLYPH_RIM_PAD = MARKER_OUTLINE + 1; // slack around a cached silhouette, s
 //                             gold border shipped as an 8-tile 128×16 strip.
 //  · ToolTip*Icon.blp         the cost-row icons (this is why they exist — they are
 //                             NOT the top-bar resource icons).
-const ACTIVE_BUTTON = "UI\\Widgets\\Console\\Human\\CommandButton\\human-activebutton.blp";
 const TOOLTIP_BORDER = "UI\\Widgets\\ToolTips\\Human\\human-tooltip-border.blp";
 const TOOLTIP_BACKGROUND = "UI\\Widgets\\ToolTips\\Human\\human-tooltip-background.blp";
 /** `war3skins.txt` [Default] GoldIcon / LumberIcon / SupplyIcon — the three textures
@@ -813,7 +812,6 @@ const TOOLTIP_COST_ICON = {
 // peasant's bar is 5 rows of fill inside a 1px top/bottom, 2px left/right black border, and
 // its pixels come back 0,255,0 / 0,151,0 / … — the texture's own 255 / 151 / … rows times a
 // PURE green. Hence the tints below.
-const STATBAR_FILL = "UI\\Feedback\\HPBarConsole\\human-healthbar-fill.blp";
 
 /**
  * The hero bar in the screen's top-left corner (issue #95) — one button per hero you own,
@@ -859,83 +857,6 @@ const HERO_BAR = {
  *  0.02 square, its string sits 0.005 to its right, and `ObserverPanelStringTemplate` sets
  *  MasterFont at 0.008. */
 const AUTO_CAMERA_BOX = { box: 0.02, gap: 0.005, font: 0.008 } as const;
-
-/** The one texture `UI\Feedback\Autocast\UI-ModalButtonOn.mdx` draws — the spark its four
- *  corner emitters chase around a button that is standing ON. See ui/modalButtonFx.ts, which
- *  is where the rest of that model lives. */
-const MODAL_SPARK = "Textures\\HeroLevel-Particle.blp";
-
-/** The second texture `UI\Buttons\HeroLevel\HeroLevel.mdx` draws — the soft ring its one
- *  quad wears around a portrait whose hero has a skill point waiting. The model's OTHER
- *  texture is the spark above, the same file both models emit. See ui/heroLevelFx.ts. */
-const HERO_LEVEL_RING = "UI\\Buttons\\HeroLevel\\HeroLevel-Border.blp";
-
-// The console's own widget art, named by `UI\war3skins.txt` KEY rather than by path so the
-// per-race entries take effect (the inventory cover is the one the four races differ on).
-// These are the keys the engine's SIMPLESTATUSBAR / backdrop frames use, out of the same
-// table `DecorateFileNames` reads:
-//
-//   BuildQueueBackdrop            human-unitqueue-border.blp    the whole training-queue
-//                                                               widget: one big slot for the
-//                                                               unit in progress and six
-//                                                               numbered ones for the queue
-//   SimpleXpBarBorder / …Console  human-xpbar-border.blp        the hero XP bar — a gold
-//                                 human-bigbar-fill.blp         frame over a grey fill the
-//                                                               engine tints
-//   SimpleProgressBar*            the SAME two files            the timed-life / summon bar
-//   SimpleBuildTimeIndicator(Border)                            the build/train progress bar;
-//                                 human-buildprogressbar-*.blp  its fill ships already gold
-//   ConsoleInventoryCoverTexture  <Race>UITile-InventoryCover   the crest over the 2×3 when
-//                                                               the selection has no inventory
-//   ConsoleInventoryNoCapacity    <race>-inventory-slotfiller   one opaque 64×64 plug per
-//                                                               pocket past the inventory's
-//                                                               "Item Capacity" (a 2-slot
-//                                                               backpack shows its top row)
-//   CommandButtonNumberOverlay    human-button-lvls-overlay.blp the boxed number in an
-//                                                               icon's corner — see countBadge
-const CONSOLE_ART = {
-  queueBorder: "BuildQueueBackdrop",
-  bigBarBorder: "SimpleXpBarBorder",
-  bigBarFill: "SimpleXpBarConsole",
-  buildBarBorder: "SimpleBuildTimeIndicatorBorder",
-  buildBarFill: "SimpleBuildTimeIndicator",
-  inventoryCover: "ConsoleInventoryCoverTexture",
-  inventoryNoCapacity: "ConsoleInventoryNoCapacity",
-  numberOverlay: "CommandButtonNumberOverlay",
-  /** `CargoBackdrop` — `human-transport-slot.blp`, ONE gold-framed 64×64 pocket, drawn once
-   *  per seat of a cargo hold (the panel's slots are the engine's own layout, not the FDF's:
-   *  `SimpleInfoPanelCargoDetail` carries only the name and description strings). */
-  cargoSlot: "CargoBackdrop",
-} as const;
-
-/** What the engine tints `human-bigbar-fill.blp` with, read off the models that draw the
- *  same bars in 3D: `XpBarConsole.mdx`'s geoset colour for the hero XP bar, `TimerBar.mdx`'s
- *  for the timed-life one a summon counts down on. (The build bar needs no entry — its own
- *  fill texture ships gold rather than grey.) */
-const BIGBAR_TINT = {
-  xp: [139, 0, 131],
-  timer: [65, 130, 210],
-} as const;
-
-/** The colour each bar multiplies the fill texture by. Green is measured (see above), so
- *  yellow and red are the engine's matching primaries. WC3 floats no mana bar at all, so
- *  its blue has no measurement to match, and the one it wears is OURS: the developer's pick
- *  off the observer HUD's mock-up (issue #168), a clear azure that reads as mana at a glance.
- *  It replaced the game's own mana art colour, ManaBarConsoleSmall.mdx's geoset colour
- *  (0.0627, 0, 0.9020) — a violet so deep that on the dark slab it read almost black. */
-const STATBAR_TINT = {
-  green: [0, 255, 0],
-  yellow: [255, 255, 0],
-  red: [255, 0, 0],
-  mana: [42, 108, 240], // #2a6cf0
-  /** …and the slab UNTINTED, for the Team Colored bars (issue #141). A player's colour is not
-   *  one of four fixed tints — it is whatever slot the body is wearing this frame — so that
-   *  multiply cannot be baked here and is done by the stylesheet instead
-   *  (`background-blend-mode: multiply` over an inline `background-color`, which is the same
-   *  arithmetic this function performs). What it needs from here is the grey slab itself,
-   *  point-sampled to STATBAR_ROWS like its four tinted twins. */
-  plain: [255, 255, 255],
-} as const;
 
 /** Multi-selection grid tiers (issue #109). WC3's own selection stops at 12 units and draws
  *  them as one row of large icons; OpenWar3 lifts the cap, so instead of refusing units the
@@ -1373,37 +1294,6 @@ function poolReadout(cur: number, max: number): string {
   return cap > POOL_PAIR_MAX ? String(shown) : `${shown} / ${cap}`;
 }
 
-/** How many rows of fill the client shows inside the frame, and so how many the slab is
- *  point-sampled down to here. Its 16 rows are two of white over twelve of flat grey over
- *  two dark ones; squeezed into a 5px bar by a smooth resize, the white pair averages away
- *  and the bar loses the lit top edge the client has. Sampling instead of blending keeps it
- *  — 255 / 151 / 151 / 152 / 91, against the client's measured 255 / 151 / 151 / 151 / 142. */
-const STATBAR_ROWS = 5;
-
-/**
- * Multiply a grey bar-fill texture by one bar colour — the whole of what the engine does to
- * every bar it draws, from the slabs floating over units to the hero's XP bar.
- *
- * `rows` is how tall to bake it. Only the floating status bar needs it: its slab is squeezed
- * into five screen pixels, and a smooth resize there averages the white top pair away (see
- * STATBAR_ROWS). Everything else keeps the texture's own height.
- */
-function bakeStatBarFill(fill: HTMLCanvasElement, tint: readonly number[], rows = fill.height): string {
-  const w = fill.width;
-  const out = document.createElement("canvas");
-  out.width = w;
-  out.height = rows;
-  const ctx = out.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(fill, 0, 0, w, rows);
-  const img = ctx.getImageData(0, 0, w, rows);
-  for (let i = 0; i < img.data.length; i += 4) {
-    for (let k = 0; k < 3; k++) img.data[i + k] = (img.data[i + k] * tint[k]) / 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  return out.toDataURL();
-}
-
 /** How opaque the tooltip slate is drawn. OURS, and deliberately above the texture's own
  *  195/255 (0.765): the developer's call (2026-11-13) — with our brighter, not-yet-fixed-function
  *  map behind it (docs/lighting.md) the BLP's alpha let too much terrain through every slab, hint
@@ -1602,7 +1492,6 @@ export class GameHud {
   private heroLevelFx!: HeroLevelFx;
   private cmdFx: HTMLCanvasElement[] = []; // per command slot, shown while the button is on
   /** The crest drawn over the six slots when the selection has no inventory. */
-  private invCover!: HTMLDivElement;
   /** "Inventory" on the console art's plaque — only while there IS an inventory to title. */
   private invTitle: HTMLDivElement | null = null;
   private dotsT = 0;
@@ -1641,20 +1530,21 @@ export class GameHud {
   private topTimer = 0;
 
   constructor(parent: HTMLElement, private driver: HudDriver) {
+    applyOpenWar3Theme();
     this.root = document.createElement("div");
     this.root.className = "hud";
     // The sparkle every "standing on" button wears — an autocast toggled on, a hero with a
     // skill point waiting. Built before the console and the hero bar because both hang their
     // overlays off it, and told once where its texture is.
-    this.modalFx = new ModalButtonFx(driver.blpCanvas(MODAL_SPARK));
-    this.questFx = new QuestButtonFx(driver.blpCanvas(MODAL_SPARK)); // the same spark texture
+    this.modalFx = new ModalButtonFx(null);
+    this.questFx = new QuestButtonFx(null);
     // …and how far past a button's edge that effect reaches, so the stylesheet can inset the
     // overlay by the model's own geometry instead of a number typed twice.
     this.root.style.setProperty("--modal-fx-overhang", `${(MODAL_FX_OVERHANG * 100).toFixed(3)}%`);
     // The hero bar's indicator is a MODEL OF ITS OWN, not the same sparkle scaled: a pulsing
     // gold ring around the portrait with sparks spilling off all four of its edges. Same two
     // steps — build it with its textures, hand its overhang to the stylesheet.
-    this.heroLevelFx = new HeroLevelFx(driver.blpCanvas(MODAL_SPARK), driver.blpCanvas(HERO_LEVEL_RING));
+    this.heroLevelFx = new HeroLevelFx(null, null);
     // Unitless, not a percentage: the overlay is a SIBLING of the portrait rather than a child
     // of it (it draws behind), so it has no percentage box of its own to be inset from and the
     // stylesheet multiplies this by `--hero-btn` instead.
@@ -1741,86 +1631,9 @@ export class GameHud {
   /** Takes the console's press watcher back off `window` — see `watchPress`. */
   private unwatchPress: () => void = () => {};
 
-  /** Hand the real console/tooltip textures to the stylesheet as custom properties.
-   *  Each is optional: without a mounted install the CSS keeps its own placeholder
-   *  chrome, so the `.skinned` classes gate every rule that needs the art. */
+  /** Apply the native HUD theme; gameplay icons are loaded separately. */
   private applyWidgetSkin(): void {
-    const active = this.driver.blpUrl(ACTIVE_BUTTON);
-    if (active) {
-      this.root.style.setProperty("--hud-activebutton", `url(${active})`);
-      this.root.classList.add("hud-activebutton-skinned");
-    }
-    const strip = this.driver.blpCanvas(TOOLTIP_BORDER);
-    const border = strip ? sliceTooltipBorder(strip) : null;
-    const bg = this.driver.blpCanvas(TOOLTIP_BACKGROUND);
-    const fill = bg ? tooltipFill(bg) : null;
-    if (border && fill) {
-      // Lift these to :root (not just the HUD root) so the world-space hover slab —
-      // which lives in ui/stage.ts's world layer, a separate DOM subtree — is skinned
-      // by the same nine-patch as the command-card tooltip. The body class gates the
-      // hover slab's `.skinned` look purely in CSS, so rts.ts needn't know about art.
-      document.documentElement.style.setProperty("--hud-tooltip-border", `url(${border})`);
-      document.documentElement.style.setProperty("--hud-tooltip-fill", fill);
-      document.body.classList.add("hud-tooltip-skinned");
-      this.cmdTooltip.classList.add("skinned");
-    }
-    this.applyStatBarSkin();
-    this.applyConsoleWidgetSkin();
-  }
-
-  /** Hand the console's widget art to the stylesheet: the training-queue border, the two
-   *  progress-bar frames, the tinted big-bar fills and the inventory cover. All of it is
-   *  named by war3skins KEY (`CONSOLE_ART`) so the race sections apply. */
-  private applyConsoleWidgetSkin(): void {
-    const url = (key: string): string | null => this.driver.blpUrl(this.driver.skinPath(key));
-    const queue = url(CONSOLE_ART.queueBorder);
-    const barBorder = url(CONSOLE_ART.bigBarBorder);
-    const barFill = this.driver.blpCanvas(this.driver.skinPath(CONSOLE_ART.bigBarFill));
-    if (!queue || !barBorder || !barFill) return; // no install: the CSS placeholders stand
-    const root = document.documentElement.style;
-    root.setProperty("--hud-queue-border", `url(${queue})`);
-    root.setProperty("--hud-bigbar-border", `url(${barBorder})`);
-    // The big-bar fill ships grey, for the engine to multiply by whichever bar is using it —
-    // the same trick the floating status bars use, so it bakes the same way.
-    for (const [name, tint] of Object.entries(BIGBAR_TINT)) {
-      root.setProperty(`--hud-bigbar-${name}`, `url(${bakeStatBarFill(barFill, tint)})`);
-    }
-    const buildBorder = url(CONSOLE_ART.buildBarBorder);
-    const buildFill = url(CONSOLE_ART.buildBarFill);
-    if (buildBorder && buildFill) {
-      root.setProperty("--hud-buildbar-border", `url(${buildBorder})`);
-      root.setProperty("--hud-buildbar-fill", `url(${buildFill})`);
-    }
-    const cover = url(CONSOLE_ART.inventoryCover);
-    if (cover) root.setProperty("--hud-inventory-cover", `url(${cover})`);
-    const noCapacity = url(CONSOLE_ART.inventoryNoCapacity);
-    if (noCapacity) root.setProperty("--hud-inventory-nocap", `url(${noCapacity})`);
-    const cargo = url(CONSOLE_ART.cargoSlot);
-    if (cargo) root.setProperty("--hud-cargo-slot", `url(${cargo})`);
-    // The boxed number an icon wears in its corner (see countBadge). On :root and gated by a
-    // class of its own rather than by `hud-widget-skinned`, because the badge is worn by the
-    // HERO BAR too — which is not in the console, and is on screen with no console at all
-    // during a cinematic.
-    const number = url(CONSOLE_ART.numberOverlay);
-    if (number) {
-      root.setProperty("--hud-number-overlay", `url(${number})`);
-      document.body.classList.add("hud-number-skinned");
-    }
-    document.body.classList.add("hud-widget-skinned");
-  }
-
-  /** Tint the status-bar slab once per bar colour and hand the four to the stylesheet.
-   *  Lifted to `:root` for the same reason the tooltip's art is: the bars live in the world
-   *  layer (ui/stage.ts), a DOM subtree the HUD does not own, and render/worldOverlays.ts
-   *  should not have to know about art. */
-  private applyStatBarSkin(): void {
-    const fill = this.driver.blpCanvas(STATBAR_FILL);
-    if (!fill) return; // no install mounted: the CSS placeholder bar stands
-    const root = document.documentElement.style;
-    for (const [state, tint] of Object.entries(STATBAR_TINT)) {
-      root.setProperty(`--statbar-${state}`, `url(${bakeStatBarFill(fill, tint, STATBAR_ROWS)})`);
-    }
-    document.body.classList.add("hud-statbar-skinned");
+    this.root.classList.add("ow3-hud");
   }
 
   /** One cost-row entry: the game's own tooltip icon plus the amount, turning red
@@ -2278,12 +2091,6 @@ export class GameHud {
       for (const [btn] of this.minimapButtonZones) console_.append(btn);
     }
     if (skinned) console_.append(this.selHpText, this.selMpText);
-    // The crest that replaces the six slots when the selection carries nothing. LAST, so it
-    // paints over them; only the console art's own version of this corner is under it.
-    this.invCover = document.createElement("div");
-    this.invCover.className = "hud-inventory-cover";
-    this.invCover.hidden = true;
-    if (skinned) console_.append(this.invCover);
     if (skinned) {
       // The plaque's word. The art leaves the plaque blank and the engine letters it, so it is
       // ours to draw — and it goes with the six pockets: under the crest there is no plaque.
@@ -2324,9 +2131,6 @@ export class GameHud {
         this.invTitle.classList.remove("hud-zone"); // a caption: the clicks go to the console
         this.invTitle.style.pointerEvents = "none";
       }
-      place(this.invCover, CONSOLE_INVENTORY_COVER);
-      this.invCover.classList.remove("hud-zone"); // decoration: it must not eat the clicks
-      this.invCover.style.pointerEvents = "none";
     }
 
     // Wrapper holds the background and the real console; DOM order ensures the
@@ -3805,10 +3609,6 @@ export class GameHud {
    *  enough to run each frame; only touches the DOM when a slot changed. */
   private refreshInventory(): void {
     const inv = this.driver.inventory();
-    // No inventory at all (rts.inventorySlots() returns nothing for a unit that has no
-    // pockets, which in melee means everything but a hero) — the console wears its crest
-    // instead, exactly as the real client does.
-    this.invCover.hidden = inv.length > 0;
     if (this.invTitle) {
       this.invTitle.hidden = inv.length === 0;
       // Asked every frame because the string table loads after the HUD is built.

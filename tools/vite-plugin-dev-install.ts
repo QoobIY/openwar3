@@ -54,6 +54,14 @@ async function collectMaps(dir: string, prefix: string, into: string[]): Promise
   }
 }
 
+async function collectMedia(dir: string, prefix: string, into: string[]): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}\\${entry.name}` : entry.name;
+    if (entry.isDirectory()) await collectMedia(join(dir, entry.name), rel, into);
+    else if (entry.isFile()) into.push(rel);
+  }
+}
+
 /** The CASC pieces a mount needs, as install-relative paths (vfs/casc.ts). */
 interface CascManifest {
   buildInfo: string;
@@ -86,8 +94,10 @@ export function devInstall(): Plugin {
     apply: "serve", // never present in a build — see the note above
     configureServer(server) {
       const root = resolve(process.env.OPENWAR3_INSTALL ?? "Warcraft III");
+      const mediaRoot = resolve("media");
       const ok = existsSync(root);
-      if (!ok) {
+      const okMedia = existsSync(join(mediaRoot, "manifest.json")) && existsSync(join(mediaRoot, "files"));
+      if (!ok && !okMedia) {
         server.config.logger.warn(
           `[dev-install] no install at ${root} — ?dev boot is unavailable. ` +
             `Set OPENWAR3_INSTALL to your Warcraft III folder.`,
@@ -95,10 +105,53 @@ export function devInstall(): Plugin {
       }
 
       server.middlewares.use("/wc3", (req, res, next) => {
-        if (!ok) return next();
+        if (!ok && !okMedia) return next();
         const url = new URL(req.url ?? "/", "http://x");
 
-        if (url.pathname === "/manifest.json") {
+        if (okMedia && url.pathname === "/media-manifest.json") {
+          void (async () => {
+            const files: string[] = [];
+            await collectMedia(mediaRoot, "", files);
+            const customKeys = existsSync(join(mediaRoot, "files", CUSTOM_KEYS)) ? `files\\${CUSTOM_KEYS}` : null;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify({ files, customKeys }));
+          })();
+          return;
+        }
+
+        if (okMedia && url.pathname === "/media-file") {
+          const rel = url.searchParams.get("path");
+          const full = rel && safeJoin(mediaRoot, rel);
+          if (!full || !existsSync(full) || !statSync(full).isFile()) {
+            res.statusCode = 404;
+            res.end("not found");
+            return;
+          }
+          const size = statSync(full).size;
+          res.setHeader("accept-ranges", "bytes");
+          res.setHeader("content-type", "application/octet-stream");
+          const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? "");
+          if (range) {
+            const start = Number(range[1]);
+            const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+            if (start > end) {
+              res.statusCode = 416;
+              res.setHeader("content-range", `bytes */${size}`);
+              res.end();
+              return;
+            }
+            res.statusCode = 206;
+            res.setHeader("content-range", `bytes ${start}-${end}/${size}`);
+            res.setHeader("content-length", String(end - start + 1));
+            createReadStream(full, { start, end }).pipe(res);
+            return;
+          }
+          res.setHeader("content-length", String(size));
+          createReadStream(full).pipe(res);
+          return;
+        }
+
+        if (ok && url.pathname === "/manifest.json") {
           void (async () => {
             const entries = await readdir(root, { withFileTypes: true });
             const archives = entries.filter((e) => e.isFile() && MPQ.test(e.name)).map((e) => e.name);
@@ -113,7 +166,7 @@ export function devInstall(): Plugin {
           return;
         }
 
-        if (url.pathname === "/customkeys" && req.method === "POST") {
+        if (ok && url.pathname === "/customkeys" && req.method === "POST") {
           const chunks: Buffer[] = [];
           req.on("data", (c: Buffer) => chunks.push(c));
           req.on("end", () => {
@@ -133,7 +186,7 @@ export function devInstall(): Plugin {
           return;
         }
 
-        if (url.pathname === "/map" && req.method === "POST") {
+        if (ok && url.pathname === "/map" && req.method === "POST") {
           // A bare .w3m/.w3x file name and nothing else — no separator, nothing that climbs out
           // (the same rule as electron/install.mjs `writeDownloadedMap`).
           const name = url.searchParams.get("name") ?? "";
@@ -166,7 +219,7 @@ export function devInstall(): Plugin {
           return;
         }
 
-        if (url.pathname === "/file") {
+        if (ok && url.pathname === "/file") {
           const rel = url.searchParams.get("path");
           const full = rel && safeJoin(root, rel);
           if (!full || !existsSync(full) || !statSync(full).isFile()) {

@@ -34,6 +34,7 @@ release/
 build/
 .cdn-cache/
 
+
 # The 32-bit Linux build's bundled main process (tools/build-legacy-main.mjs → Electron 18, docs/linux.md)
 electron/main-legacy.cjs
 
@@ -41,3 +42,7 @@ electron/main-legacy.cjs
 .claude/*
 # …except the project settings, which keep Claude Code from adding co-author trailers
 !.claude/settings.json
+
+
+source
+media/

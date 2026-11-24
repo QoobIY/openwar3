@@ -1,3 +1,5 @@
+import { decodeWar3Text } from "../vfs/textEncoding";
+
 // Custom object data — war3map.w3u (Phase 7 — issue #33; see docs/triggers.md).
 //
 // Custom maps define their own units in war3map.w3u: a table of "custom" objects
@@ -963,7 +965,7 @@ function applyAbilityMods(def: AbilityDef, mods: AbilMod[], meta: MappedData, tr
  * each 4-char field code to its column/data slot); without it nothing can be applied.
  */
 export function applyMapAbilityData(registry: AbilityRegistry, w3aBytes: Uint8Array, metaBytes: Uint8Array, wtsBytes?: Uint8Array, layer: ObjectLayer = {}): number {
-  const meta = new MappedData(new TextDecoder("windows-1252").decode(metaBytes));
+  const meta = new MappedData(decodeWar3Text(metaBytes));
   const trigStr = makeTrigStr(wtsBytes);
   const w3a = new War3MapW3d();
   w3a.load(w3aBytes);
@@ -1079,7 +1081,7 @@ function applyUpgradeMods(def: UpgradeDef, mods: AbilMod[], meta: MappedData, tr
  * field code to its UpgradeData column; without it nothing can be applied.
  */
 export function applyMapUpgradeData(registry: UpgradeRegistry, w3qBytes: Uint8Array, metaBytes: Uint8Array, wtsBytes?: Uint8Array): number {
-  const meta = new MappedData(new TextDecoder("windows-1252").decode(metaBytes));
+  const meta = new MappedData(decodeWar3Text(metaBytes));
   const trigStr = makeTrigStr(wtsBytes);
   const w3q = new War3MapW3d(); // level-indexed, like abilities
   w3q.load(w3qBytes);

@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import type { DataSource } from "../vfs/types";
 
 // Weather registry — the map's ATMOSPHERE (7.23; issue #33, see docs/triggers.md).
@@ -106,7 +107,7 @@ export function loadWeatherRegistry(vfs: DataSource): WeatherRegistry {
   const defs = new Map<string, WeatherDef>();
   const bytes = vfs.rawBytes(SLK);
   if (!bytes) return new WeatherRegistry(defs);
-  const table = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const table = new MappedData(decodeWar3Text(bytes));
 
   for (const key of Object.keys(table.map)) {
     const r = table.getRow(key) as Row | undefined;

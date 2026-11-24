@@ -49,12 +49,9 @@ export const fetchInstallBytes = async (url: FileUrl, path: string): Promise<Uin
 export const fetchInstallText = async (url: FileUrl, path: string): Promise<string> =>
   (await fetchInstallFile(url, path)).text();
 
-/** …and one read as a Warcraft III DATA file: **windows-1252**, the encoding every `*Strings.txt`
- *  in the game is written in. `fetchInstallText` decodes UTF-8, which is right for `.build.info`
- *  and wrong for anything carrying a localized tooltip (assets/opfs.ts `readAnsi` is the picker's
- *  half of the same rule). */
-export const fetchInstallAnsi = async (url: FileUrl, path: string): Promise<string> =>
-  new TextDecoder("windows-1252").decode(await fetchInstallBytes(url, path));
+/** Localized data stays as bytes until the mounted install's code page is known. */
+export const fetchInstallAnsi = async (url: FileUrl, path: string): Promise<Uint8Array> =>
+  fetchInstallBytes(url, path);
 
 /**
  * A `data.NNN` read in ranges instead of whole. Both servers honour `Range`, so the mount slices

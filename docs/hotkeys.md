@@ -165,7 +165,8 @@ unit's command card, and the selected button's key.
   comments, blank lines, section order and sections the editor has no button for all survive a
   save, and a value set back to the install's own is taken OUT of the file. It reads INI itself,
   because mdx-m3-viewer's `IniFile` strips a value's outer quotes and so reads a quoted per-level
-  list (`Tip="a, b","c"`) wrong. The bytes are windows-1252, like the read.
+  list (`Tip="a, b","c"`) wrong. Reading and saving use the install's detected text encoding:
+  UTF-8, windows-1251 for legacy Russian text, or windows-1252 for Western locales.
 * **Saving goes back through the door the install came in by** (`PickedInstall.saveCustomKeys`):
   the browser picker's directory handle (asking for write permission on the Save click), the
   desktop shell's `ow3:customkeys-save` (bytes only; the shell names the path), and the dev

@@ -14,9 +14,7 @@
   </head>
   <body>
     <canvas id="bg" hidden></canvas>
-    <!-- mdx-m3-viewer owns its own WebGL1 context, so its renderers each get a
-         dedicated canvas: the animated main-menu glue scene (issue #54), single
-         models (Phase 3) and full maps (authentic). -->
+    <!-- Dedicated WebGL canvases for individual models and full maps. -->
     <canvas id="menubg" hidden></canvas>
     <canvas id="model" hidden></canvas>
     <canvas id="map" hidden></canvas>

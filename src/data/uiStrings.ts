@@ -12,6 +12,7 @@
 // Both are localized files, so nothing here hardcodes a word of them.
 
 import type { DataSource } from "../vfs/types";
+import { decodeWar3Text } from "../vfs/textEncoding";
 
 export const HELP_STRINGS = "UI\\HelpStrings.txt";
 export const TIP_STRINGS = "UI\\TipStrings.txt";
@@ -19,7 +20,7 @@ export const TIP_STRINGS = "UI\\TipStrings.txt";
 /** Read a `UI\*.txt` as the 8-bit text it is (the same decode the FDF loader uses). */
 async function readText(vfs: DataSource, path: string): Promise<string | null> {
   if (!vfs.exists(path)) return null;
-  return new TextDecoder("latin1").decode(await vfs.read(path));
+  return decodeWar3Text(await vfs.read(path));
 }
 
 /**

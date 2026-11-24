@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import { layCustomKeys } from "./customKeys";
 import type { DataSource } from "../vfs/types";
 import { gameNum } from "./gameplayConstants";
@@ -1366,7 +1367,7 @@ function fillIntrinsicOrders(defs: Map<string, AbilityDef>, vfs: DataSource): st
   if (!bytes) return [];
   const skillCode = new Map<string, string>(); // "fingerofdeath" (the NAME) → "ANfd"
   const orderOf = new Map<string, string>(); // "fingerofdeath" (the NAME) → "fingerofdeath"
-  for (const line of new TextDecoder("windows-1252").decode(bytes).split(/\r?\n/)) {
+  for (const line of decodeWar3Text(bytes).split(/\r?\n/)) {
     const skill = /^HeroSkill(\w+)=\d+,heroskillcode,'(\w{4})'/.exec(line);
     if (skill) skillCode.set(skill[1].toLowerCase(), skill[2]);
     const order = /^UnitOrder(\w+)=\d+,unitorder\w+,`(\w+)`/.exec(line);
@@ -1418,17 +1419,17 @@ export function loadAbilityRegistry(vfs: DataSource): AbilityRegistry {
   const defs = new Map<string, AbilityDef>();
   const bytes = vfs.rawBytes("Units\\AbilityData.slk");
   if (!bytes) return new AbilityRegistry(defs);
-  const data = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const data = new MappedData(decodeWar3Text(bytes));
 
   const func = new MappedData();
   for (const p of FUNC_FILES) {
     const b = vfs.rawBytes(p);
-    if (b) func.load(new TextDecoder("windows-1252").decode(b));
+    if (b) func.load(decodeWar3Text(b));
   }
   const strs = new MappedData();
   for (const p of STRING_FILES) {
     const b = vfs.rawBytes(p);
-    if (b) strs.load(new TextDecoder("windows-1252").decode(b));
+    if (b) strs.load(decodeWar3Text(b));
   }
   // The player's own file over both (data/customKeys.ts), which is where an ability's whole
   // `Un*` family comes from too: `Unhotkey`, `Untip` and `Unbuttonpos` are three of the eleven.
@@ -1591,7 +1592,7 @@ export function loadAbilityRegistry(vfs: DataSource): AbilityRegistry {
   const reg = new AbilityRegistry(defs, new Map(), buffs);
   reg.triggerOrders = triggerOrders;
   const metaBytes = vfs.rawBytes("Units\\AbilityMetaData.slk");
-  if (metaBytes) reg.meta = new MappedData(new TextDecoder("windows-1252").decode(metaBytes));
+  if (metaBytes) reg.meta = new MappedData(decodeWar3Text(metaBytes));
   return reg;
 }
 

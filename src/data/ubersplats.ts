@@ -1,4 +1,5 @@
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import type { DataSource } from "../vfs/types";
 
 // UberSplat registry — the "ground texture" decals WC3 paints on the terrain under
@@ -57,7 +58,7 @@ export function loadUberSplatRegistry(vfs: DataSource): UberSplatRegistry {
   const defs = new Map<string, UberSplatDef>();
   const bytes = vfs.rawBytes(SLK);
   if (!bytes) return new UberSplatRegistry(defs);
-  const table = new MappedData(new TextDecoder("windows-1252").decode(bytes));
+  const table = new MappedData(decodeWar3Text(bytes));
 
   for (const id of Object.keys(table.map)) {
     const r = table.getRow(id) as Row | undefined;

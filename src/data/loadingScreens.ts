@@ -1,4 +1,5 @@
 import type { DataSource } from "../vfs/types";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import type { Race } from "./races";
 
 // The loading screens (issue #78) — the art WC3 puts up between the menus and the match.
@@ -67,7 +68,7 @@ export const LOAD_BAR_MODEL = "UI\\Glues\\Loading\\LoadBar\\LoadBar.mdx";
 /** Read `[LoadingScreens]` out of the mounted install. Returns [] if the file is absent. */
 export async function loadLoadingScreens(vfs: DataSource): Promise<LoadingScreenDef[]> {
   if (!vfs.exists(WORLD_EDIT_DATA)) return [];
-  return parseLoadingScreens(new TextDecoder("latin1").decode(await vfs.read(WORLD_EDIT_DATA)));
+  return parseLoadingScreens(decodeWar3Text(await vfs.read(WORLD_EDIT_DATA)));
 }
 
 /** The parse itself, split out so it can be run over the raw file headlessly. */

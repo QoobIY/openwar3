@@ -1,4 +1,5 @@
 import War3MapViewer from "mdx-m3-viewer/dist/cjs/viewer/handlers/w3x/viewer";
+import { decodeWar3Text } from "../vfs/textEncoding";
 import { dataSetFolder, isRoc, mapDataSet } from "../data/edition";
 import ModelViewer from "mdx-m3-viewer/dist/cjs/viewer/viewer";
 import { unpackPlanes } from "mdx-m3-viewer/dist/cjs/common/gl-matrix-addon";
@@ -6,6 +7,7 @@ import { mat4 } from "gl-matrix";
 import type { DataSource } from "../vfs/types";
 import { MappedData } from "mdx-m3-viewer/dist/cjs/utils/mappeddata";
 import { MpqDataSource } from "../vfs/mpq";
+import { GltfDataSource } from "../vfs/gltf";
 import { MapTableSource } from "../vfs/mapTables";
 import { LayeredDataSource } from "../vfs/layered";
 import { tilesetOverlay } from "../vfs/tileset";
@@ -153,7 +155,7 @@ import { ModelViewerScene } from "./modelViewer";
 import { animPropsFor, buildAnimSet } from "./unitAnims";
 import { OBSERVER_NAME, OBSERVER_PLAYER, type Controller, type MeleeConfig, type SlotConfig } from "../ui/lobby";
 import { MetricsOverlay } from "../ui/metrics";
-import { cursorImageValue, cursorPx, cursorValue } from "../ui/cursor";
+import { cursorPx } from "../ui/cursor";
 import { perfLog } from "../dev/perfLog";
 /** package.json's version, as the main menu prints it (vite.config.ts). */
 declare const __OW3_VERSION__: string;
@@ -542,15 +544,6 @@ type ReticleTint = "teal" | "green" | "yellow" | "red";
 // and the carried gauntlet below. A DOM stand-in that skips it moves the aiming point out
 // from under the player mid-gesture, which is the whole complaint.
 const CURSOR_HOTSPOT: [number, number] = [cursorPx(3), cursorPx(3)];
-// The pulse a TINTED cursor wears, the hover hand and the reticle over a target alike (overlayCursor):
-// a triangle over PULSE_MS, in eight held steps, measured at 30 fps off the real 1.30.4 client under
-// Wine. Each table is the gain per step on a fixed texel: the hand against the idle hand, the reticle
-// against the resting teal one (which does not pulse, as the model's one-frame "Target" sequence with
-// no colour track says, UI\Cursor\HumanCursor.mdx). A cursor image cannot animate, so these are baked
-// into stills and stepped on the wall clock.
-const PULSE_MS = 500;
-const HAND_PULSE = [1, 1.23, 1.45, 1.69, 1.9, 1.69, 1.45, 1.23];
-const RETICLE_PULSE = [0.61, 0.71, 0.76, 0.87, 1, 0.87, 0.76, 0.71];
 // Where the carried item's icon sits against the gauntlet holding it, straight off
 // `UI\Cursor\<race>Cursor.mdx`: "HoldItem" shows geoset 1 — the replaceable-21 quad that is
 // the item's own icon — at model x[-0.020, 0.007] y[-0.0186, 0.008], BEHIND (z -0.0192) the
@@ -952,6 +945,7 @@ interface W3xViewer {
   on(event: string, cb: (e: unknown) => void): void;
   once(event: string, cb: () => void): void;
   loadMap(buffer: ArrayBuffer | Uint8Array): void;
+  loadBaseFile(path: string, dataType: string): Promise<{ data: unknown } | undefined>;
   load(src: unknown, solver: Solver): Promise<SpawnModel | undefined>;
   /** Everything the viewer is still fetching. It pushes each pre-placed unit into
    *  `map.units` only when that unit's MODEL resolves, so "promiseMap is empty" is the
@@ -2225,7 +2219,22 @@ export class MapViewerScene {
     // land on the next one.
     canvas.getContext("webgl", { alpha: false, antialias: antialiasing() });
     const viewer = new ViewerClass(canvas, solver, false);
-    viewer.terrainModelExists = (path) => vfs.exists(path);
+    const loadBaseFile = viewer.loadBaseFile.bind(viewer);
+    viewer.loadBaseFile = async (path, dataType) => {
+      const resource = await loadBaseFile(path, dataType);
+      if (dataType === "arrayBuffer" && /\.mdx$/i.test(path) && resource?.data) {
+        const bytes = resource.data instanceof ArrayBuffer ? new Uint8Array(resource.data) : resource.data instanceof Uint8Array ? resource.data : null;
+        if (bytes && !(bytes.length >= 4 && bytes[0] === 77 && bytes[1] === 68 && bytes[2] === 76 && bytes[3] === 88)) {
+          const converted = await vfs.read(path);
+          return { ...resource, data: converted.buffer };
+        }
+      }
+      return resource;
+    };
+    viewer.terrainModelExists = (path) => {
+      const bytes = vfs.rawBytes(path);
+      return !!bytes && bytes.length >= 4 && bytes[0] === 77 && bytes[1] === 68 && bytes[2] === 76 && bytes[3] === 88;
+    };
     // Animation Quality: Low's shared poses are for THIS viewer — the world, where a crowd of one
     // model stands at the same point of the same clip. Every other viewer on the page (the menu's
     // backdrop, the loading screen, the portraits, the HUD's clock) keeps sampling for itself at
@@ -2416,7 +2425,7 @@ export class MapViewerScene {
     this.mapArchive = archive; // kept so startCustom can read war3map.j (Phase 7 triggers)
     // Laid over the install for every MODEL and texture the scene loads itself — the units a
     // trigger creates, the effects it spawns (see `create`'s solver). Audio's twin is below.
-    this.mapFiles.archive = archive;
+    this.mapFiles.archive = new GltfDataSource(archive);
     this.mapFiles.epoch++;
     // The map's own object data goes in FIRST — before anything reads the registries for this
     // map. It is the map's declaration of what its types ARE, so every question asked below
@@ -3083,7 +3092,7 @@ export class MapViewerScene {
 
   private slkText(path: string): string {
     const bytes = this.tables.rawBytes(path); // a map's own table first (src/vfs/mapTables.ts)
-    return bytes ? new TextDecoder("windows-1252").decode(bytes) : "";
+    return bytes ? decodeWar3Text(bytes) : "";
   }
 
   /** Shared match bring-up for both melee and custom starts: pick the local
@@ -5761,7 +5770,7 @@ export class MapViewerScene {
     const bytes = this.mapArchive?.rawBytes(MAP_MISC_FILE);
     if (!bytes) return;
     try {
-      this.mapMisc = parseMapMisc(new TextDecoder("latin1").decode(bytes));
+      this.mapMisc = parseMapMisc(decodeWar3Text(bytes));
     } catch (err) {
       console.warn(`[jass] ${MAP_MISC_FILE} failed (non-fatal):`, err);
       return;
@@ -5928,7 +5937,7 @@ export class MapViewerScene {
           if (this.rts) {
             const archive = this.mapArchive;
             const install = this.vfs;
-            const text = (b: Uint8Array | null | undefined): string | null => (b ? new TextDecoder("windows-1252").decode(b) : null);
+            const text = (b: Uint8Array | null | undefined): string | null => (b ? decodeWar3Text(b) : null);
             this.rts.aiScriptHost = {
               sources: (name) => {
                 const commonJ = text(install.rawBytes("Scripts\\common.j"));
@@ -6627,7 +6636,7 @@ export class MapViewerScene {
     for (const [table, paths] of tables) {
       for (const path of paths) {
         const bytes = map.rawBytes(path);
-        if (bytes?.length) table.load(new TextDecoder("windows-1252").decode(bytes));
+        if (bytes?.length) table.load(decodeWar3Text(bytes));
       }
     }
   }
@@ -8021,7 +8030,7 @@ export class MapViewerScene {
     }
     if (this.cellRarity === undefined) {
       const bytes = this.vfs.rawBytes("UI\\WorldEditData.txt");
-      this.cellRarity = bytes ? parseCellRarity(new TextDecoder("windows-1252").decode(bytes)) : null;
+      this.cellRarity = bytes ? parseCellRarity(decodeWar3Text(bytes)) : null;
     }
     const rng = this.mapScript?.interp.rt.random ?? Math.random;
     const pending = this.tileLoads.get(k);
@@ -10350,7 +10359,7 @@ export class MapViewerScene {
       for (const file of ["UI\\WorldEditStrings.txt", "UI\\WorldEditGameStrings.txt"]) {
         const bytes = this.vfs.rawBytes(file);
         if (!bytes) continue;
-        for (const line of new TextDecoder("windows-1252").decode(bytes).split(/\r?\n/)) {
+        for (const line of decodeWar3Text(bytes).split(/\r?\n/)) {
           const eq = line.indexOf("=");
           if (eq > 0 && line.startsWith("WESTRING")) {
             this.worldEditStrings.set(line.slice(0, eq).trim(), line.slice(eq + 1).trim().replace(/^"|"$/g, ""));
@@ -12356,7 +12365,7 @@ export class MapViewerScene {
     // strip's gap, the message column) stack over the console chrome rather than under it.
     // Its art is read through the map's archive too: a war3mapSkin.txt [CustomSkin] may name an
     // icon the map imports for the resource bar (data/mapSkin.ts).
-    this.consoleUi = new ConsoleUi(ui, this.assetFiles(), SKIN_SECTION[this.localRace], {
+    this.consoleUi = new ConsoleUi(ui, this.assetFiles(), "Default", {
       openPanel: (panel) => this.togglePanel(panel),
       disabledPanels: () => this.deadPanels(),
       mountClock: (slot) => this.mountClock(slot),
@@ -13385,6 +13394,9 @@ export class MapViewerScene {
   private mountClock(slot: HTMLElement): boolean {
     this.clock?.dispose();
     this.clock = null;
+    slot.textContent = "";
+    slot.classList.add("ow3-clock");
+    return true;
     if (!this.vfs.exists(timeIndicatorPath(this.localRace))) return false;
     const canvas = document.createElement("canvas");
     canvas.className = "hud-clock-canvas";
@@ -16698,210 +16710,17 @@ export class MapViewerScene {
     return this.blpIcon(paths[kind]);
   }
 
-  /** Set the client's race cursor (the top-left pointer frame of the race
-   *  cursor sprite sheet) as the in-game mouse cursor. */
   private applyRaceCursor(): void {
-    const dirs: Record<PlayableRace, string> = { human: "Human", orc: "Orc", undead: "Undead", nightelf: "NightElf" };
-    const bytes = this.vfs.rawBytes(`UI\\Cursor\\${dirs[this.localRace]}Cursor.blp`);
-    const sheet = bytes ? blpToCanvas(bytes) : null;
-    if (!sheet) return;
-    this.cursorSheet = sheet; // reused to build the target reticle (row 2) + tinted hand
-    this.reticleImgs.clear();
-    this.handImgs.clear();
-    this.overlayCursors.clear();
-    // The sheet is a grid of animation frames; the top-left cell is the idle
-    // pointer. Cells are one-eighth of the sheet width, blown up by cursorPx.
-    const cell = Math.round(sheet.width / 8);
-    const size = cursorPx(cell);
-    // The DOM stand-in for the pointer that is left, the scroll chevron, is sized in style.css
-    // off this same number, so it cannot drift from the art we cut here.
-    document.documentElement.style.setProperty("--cursor-px", `${size}px`);
-    // Hotspot near the gauntlet's fingertip (top-left). With a 32 px twin behind the enlarged
-    // cell rather than `auto`, so the OS pointer never shows through near the right or bottom
-    // edge — which is where the whole command card is (ui/cursor.ts `cursorValue`).
-    const rule = cursorValue(sheet, cell);
-    document.body.style.cursor = rule;
-    // The other two states this sheet answers for, both read off `UI\Cursor\<race>Cursor.mdx`
-    // rather than guessed at — the model names its sequences and drives the cell with a
-    // KTAT texture-translation, so the frames below are the ones the real cursor shows:
-    //  - "HoldItem" (an item right-clicked out of the inventory) = row 3, shown together
-    //    with geoset 1 (a replaceable-21 quad — the item's own icon). The sequence keys TWO
-    //    cells: col 4 (the finger still out) for its length and col 3 (the finger curled
-    //    shut) on its very last frame — so col 3 is the pose it comes to REST in, and the
-    //    one that reads as a grip. It is drawn as DOM rather than set as a `cursor:` (see
-    //    updateCarriedItem for why).
-    //  - "Scroll *" (edge-panning) = row 3, cols 5/6/7 — the three chevron frames, stepped
-    //    every 33ms (the model's keys sit 33 apart, interpolation NONE). All eight
-    //    directions play THOSE SAME three cells and differ only by a Z rotation on the
-    //    node, so one strip + a CSS rotate is the whole thing (see showScrollArrow).
-    this.holdHandUrl = this.cursorStripUrl(3, 3, 1);
-    this.scrollStripUrl = this.cursorStripUrl(3, 5, 3);
-    // Force the WC3 cursor over the ENTIRE in-game UI — buttons, the map, the
-    // minimap, everything — overriding the default pointer/crosshair cursors so
-    // only the original WC3 cursor is ever shown (per feedback).
-    if (!this.cursorStyleEl) {
-      this.cursorStyleEl = document.createElement("style");
-      document.head.appendChild(this.cursorStyleEl);
-    }
-    // Normal = the WC3 arrow everywhere. The reticle and the recoloured hand are REAL cursors
-    // too, swapped in through --ow3-reticle-cursor / --ow3-hand-cursor (updateReticle); the DOM
-    // stand-ins left, the scroll chevron and the carried item, hide it instead.
-    //  - `reticle-on` (a TINTED cursor: the hover HAND, or the armed reticle over a target) only
-    //    ever happens over the map, so it's scoped to the canvas and HUD buttons don't wear it.
-    //  - `armed-on` (an armed order's target reticle) is body-wide: in WC3 the reticle
-    //    IS the cursor while an order is armed, over the console too. Scoping this one
-    //    to #map was the bug — hovering the HUD showed the reticle AND the hand.
-    //  - `cine-on` is the letterbox: WC3 draws no cursor at all while a cinematic is running,
-    //    and it is the whole screen's rule — the console is gone, and the mouse with it.
-    //    …UNLESS a dialog is up (`dialog-on`, issue #104). A dialog is buttons, and a
-    //    cinematic that raises one has just asked the player to click something — so the
-    //    cursor comes back for as long as it is on screen, and goes again with it.
-    //  - `carrying-item` is the model's "HoldItem": the gauntlet CLOSES around what you
-    //    picked up. Both halves of it are DOM (updateCarriedItem), so this rule only has to
-    //    get the pointer out from in front of them. Body-wide, because every drop target (another slot,
-    //    the ground, an allied hero) is somewhere else on the screen.
-    //  - `scroll-on` is the edge-pan chevron, which IS the cursor while it is up — the
-    //    model hides every other geoset during its "Scroll *" sequences.
-    this.cursorStyleEl.textContent =
-      `body.in-game, body.in-game * { cursor: ${rule} !important; }\n` +
-      `body.in-game.carrying-item, body.in-game.carrying-item * { cursor: none !important; }\n` +
-      `body.in-game.reticle-on #map { cursor: var(--ow3-hand-cursor) !important; }\n` +
-      `body.in-game.armed-on, body.in-game.armed-on * { cursor: var(--ow3-reticle-cursor) !important; }\n` +
-      `body.in-game.scroll-on, body.in-game.scroll-on * { cursor: none !important; }\n` +
-      `body.in-game.cine-on:not(.dialog-on), body.in-game.cine-on:not(.dialog-on) * { cursor: none !important; }`;
+    document.body.style.cursor = "default";
+    this.cursorSheet = null;
+    this.holdHandUrl = "";
+    this.scrollStripUrl = "";
   }
 
-  /** `count` consecutive cells of the sheet's `row`, starting at `col`, laid side by side in
-   *  one image — a sprite strip a CSS `steps()` animation can walk. "" until the sheet loads. */
-  private cursorStripUrl(row: number, col: number, count: number): string {
-    return this.cursorStripCanvas(row, col, count)?.toDataURL() ?? "";
+  private overlayCursor(_kind: "reticle" | "hand", _colorKey: ReticleTint): string {
+    return "";
   }
 
-  /** `cursorStripUrl` as the canvas itself, for art that is composed further. Null until the
-   *  sheet loads. */
-  private cursorStripCanvas(row: number, col: number, count: number): HTMLCanvasElement | null {
-    const sheet = this.cursorSheet;
-    if (!sheet) return null;
-    const cell = Math.round(sheet.width / 8);
-    const size = cursorPx(cell);
-    const c = document.createElement("canvas");
-    c.width = size * count;
-    c.height = size;
-    const ctx = c.getContext("2d")!;
-    ctx.imageSmoothingEnabled = true; // bilinear (see CURSOR_SCALE)
-    for (let i = 0; i < count; i++) {
-      ctx.drawImage(sheet, (col + i) * cell, row * cell, cell, cell, i * size, 0, size, size);
-    }
-    return c;
-  }
-
-  /** The real WC3 target reticle (row 2 of the race cursor sheet: a circle with
-   *  four brackets + centre pip), recoloured to `colorKey` and cached. Replaces
-   *  the old canvas-drawn brackets. Null until the cursor sheet loads. */
-  private reticleImg(colorKey: ReticleTint): HTMLCanvasElement | null {
-    const cached = this.reticleImgs.get(colorKey);
-    if (cached) return cached;
-    const sheet = this.cursorSheet;
-    if (!sheet) return null;
-    // Measured off the real 1.30.4 client under Wine, at the brightest texel of the reticle's
-    // arms: teal is the armed cursor at rest, the other three what it turns over a target.
-    const color = { teal: [64, 255, 255], green: [0, 255, 0], yellow: [255, 255, 0], red: [255, 0, 0] }[colorKey];
-    const cell = Math.round(sheet.width / 8);
-    const size = cursorPx(cell);
-    const c = document.createElement("canvas");
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext("2d")!;
-    ctx.imageSmoothingEnabled = true; // bilinear (see CURSOR_SCALE)
-    ctx.drawImage(sheet, 0, cell * 2, cell, cell, 0, 0, size, size); // reticle = row 2, col 0
-    const img = ctx.getImageData(0, 0, size, size);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      // Grayscale art × the tint, as the real one reads: its arms fade from full colour at the
-      // root to 70 % of it (64,255,255 → 45,182,182). The art peaks at 213 once scaled up and the
-      // real reticle's arms reach 255, hence the 1.2 (clamped by the canvas).
-      const inten = (1.2 * Math.max(d[i], d[i + 1], d[i + 2])) / 255;
-      d[i] = color[0] * inten;
-      d[i + 1] = color[1] * inten;
-      d[i + 2] = color[2] * inten;
-      // alpha (d[i+3]) preserved — defines the reticle shape
-    }
-    ctx.putImageData(img, 0, 0);
-    this.reticleImgs.set(colorKey, c);
-    return c;
-  }
-
-  /** The race hand cursor (row 0, col 0 of the sheet) multiply-tinted to
-   *  `colorKey` and cached — shown (pulsing) while hovering a unit so the cursor
-   *  "stays the same but pulsates green/yellow/red". Null until it loads. */
-  private handImg(colorKey: "green" | "yellow" | "red"): HTMLCanvasElement | null {
-    const cached = this.handImgs.get(colorKey);
-    if (cached) return cached;
-    const sheet = this.cursorSheet;
-    if (!sheet) return null;
-    // The real client keeps the art's own channels and zeroes the rest: (127,140,212) reads
-    // (x,0,0) on an enemy, (0,y,0) on a friend and (x,y,0) on a neutral, with the same x and y.
-    const color = { green: [0, 255, 0], yellow: [255, 255, 0], red: [255, 0, 0] }[colorKey];
-    const cell = Math.round(sheet.width / 8);
-    const size = cursorPx(cell);
-    const c = document.createElement("canvas");
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext("2d")!;
-    ctx.imageSmoothingEnabled = true; // bilinear (see CURSOR_SCALE)
-    ctx.drawImage(sheet, 0, 0, cell, cell, 0, 0, size, size); // hand pointer = row 0, col 0
-    const img = ctx.getImageData(0, 0, size, size);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      // Multiply-tint keeps the gauntlet's shape/shading, just recoloured.
-      d[i] = (d[i] * color[0]) / 255;
-      d[i + 1] = (d[i + 1] * color[1]) / 255;
-      d[i + 2] = (d[i + 2] * color[2]) / 255;
-    }
-    ctx.putImageData(img, 0, 0);
-    this.handImgs.set(colorKey, c);
-    return c;
-  }
-
-  /** The `cursor:` value for the reticle or the tinted hand at the pulse's current step, cached.
-   *
-   *  These used to be a DOM element moved to the pointer every frame, and so drew a frame or two
-   *  behind it — the reticle you aim with visibly trailed the mouse. A real cursor is drawn by the
-   *  OS wherever the pointer IS. What that costs is the pulse: a cursor cannot run a CSS animation,
-   *  so it is baked into stills (HAND_PULSE, RETICLE_PULSE) and stepped on the wall clock. The
-   *  resting teal reticle is always one still, and that one is the rule the whole document inherits
-   *  (setOverlayCursor). Empty until the cursor sheet loads. */
-  private overlayCursor(kind: "reticle" | "hand", colorKey: ReticleTint): string {
-    const pulse = kind === "hand" ? HAND_PULSE : RETICLE_PULSE;
-    const frame = colorKey === "teal" ? -1 : Math.floor((performance.now() % PULSE_MS) / (PULSE_MS / pulse.length));
-    const key = `${kind}:${colorKey}:${frame}`;
-    const cached = this.overlayCursors.get(key);
-    if (cached !== undefined) return cached;
-    const base = kind === "reticle" ? this.reticleImg(colorKey) : colorKey === "teal" ? null : this.handImg(colorKey);
-    if (!base) return "";
-    const c = document.createElement("canvas");
-    c.width = base.width;
-    c.height = base.height;
-    const ctx = c.getContext("2d")!;
-    if (frame >= 0) ctx.filter = `brightness(${pulse[frame]})`;
-    ctx.drawImage(base, 0, 0);
-    // The reticle is aimed from its CENTRE; the hand from the gauntlet's fingertip, as the plain one.
-    const rule = kind === "reticle"
-      ? cursorImageValue(c, c.width / 2, c.height / 2)
-      : cursorImageValue(c, CURSOR_HOTSPOT[0], CURSOR_HOTSPOT[1]);
-    this.overlayCursors.set(key, rule);
-    return rule;
-  }
-
-  /** Point the resting reticle's or the map's pulsing cursor's custom property at `rule`. Written
-   *  only when it changes: this runs every frame, and a custom property is inherited by everything
-   *  under the element that holds it, so every write is a style recalc of that whole subtree.
-   *
-   *  Which is why the two live on different elements. The resting RETICLE is body-wide (`armed-on`),
-   *  so its property has to sit on <body> — and it never changes during an aim. A PULSING cursor, the
-   *  hand or the reticle over a target, steps sixteen writes a second for as long as something is
-   *  hovered, and hover only ever happens over the map, so its property sits on the map CANVAS, which
-   *  has no children: a step restyles one element instead of the ~940 in the document. */
   private setOverlayCursor(kind: "reticle" | "hand", rule: string): void {
     if (kind === "reticle") {
       if (rule === this.reticleCursorRule) return;

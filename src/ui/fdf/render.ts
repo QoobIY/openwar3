@@ -2,7 +2,7 @@ import type { DataSource } from "../../vfs/types";
 import { modalOver } from "../modal";
 import { blpToCanvas } from "../../render/blputil";
 import { wc3StripMarkup, wc3ToHtml } from "../wc3Text";
-import { gameFontStack, gameFontsReady, onGameFontsReady } from "../gameFont";
+import { gameFontsReady, onGameFontsReady } from "../gameFont";
 import type { FdfFrame } from "./parser";
 import { FdfLibrary, firstProp, hasFlag, numProp, propagateDecorate, strProp } from "./library";
 import {
@@ -18,17 +18,15 @@ import {
   type CheckBoxControl, type EditBoxControl, type ListControl, type PopupControl,
   type PopupMenuStyle, type ScrollBarStyle, type SliderControl, type TextAreaControl, type WidgetKind,
 } from "./widgets";
+import { gameplayIcon, OPENWAR3_FONT } from "../openwar3Theme";
 
-// FDF → DOM renderer (issue #54). Builds the game's frames as absolutely-positioned
-// DOM over the 3D background: BACKDROP as composited chrome from the real BLPs,
-// TEXT with WC3 markup, and the button family (GLUETEXTBUTTON/GLUEBUTTON/TEXTBUTTON)
-// with mouse-over / pushed states and shortcut keys. We ship no Blizzard assets —
-// every texture is read from the user's own mounted install at runtime.
+// FDF → DOM renderer. FDF supplies frame types, dimensions, positions, text and behaviour;
+// OpenWar3's native theme supplies panels, buttons, widgets and state styling in CSS.
+// Gameplay icons are read from the mounted install; decorative BLP chrome is not used.
 
 // The BackdropEdgeFile is one row of 8 square tiles. Determined empirically from the
 // real GlueScreen-Button1-BackdropBorder.blp (256×32): tiles 0–3 are straight edge
 // strips, 4–7 are the corners. These indices are tuned against the live render.
-const EDGE_TILE = { L: 0, R: 1, T: 2, B: 3, UL: 4, UR: 5, LL: 6, LR: 7 };
 
 /**
  * OUR flag, not the game's: "put an opaque plate under this backdrop's background".
@@ -50,7 +48,7 @@ export const OPAQUE_BACKDROP = "OpenWar3OpaqueBackdrop";
  *  player's archives at runtime (ui/gameFont.ts) — the glue screens use the same
  *  face as the rest of the game. Call it, don't cache it: the stack is only the
  *  fallback chain until an install is mounted. */
-export const uiFont = gameFontStack;
+export const uiFont = () => OPENWAR3_FONT;
 
 // The click a button makes belongs to the UI, not to any one screen: every FDF button in
 // the game answers with the same sound (UISounds.slk's `GlueScreenClick` in the menus,
@@ -552,7 +550,9 @@ function renderScrollFrame(
  * without the screen touching it.
  */
 function renderSimpleButtonLayers(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
+  el.classList.add("ow3-button", "ow3-console-button");
   const face = (key: string, cls: string): void => {
+    if (cls) return;
     const name = strProp(f, key);
     // The four faces are TOP-LEVEL Texture blocks, so they sit outside the tree
     // `propagateDecorate` walked — it is the BUTTON that carries DecorateFileNames, and its
@@ -620,6 +620,7 @@ function renderWidget(
   ctx: RenderCtx,
   abs: { left: number; top: number },
 ): void {
+  el.classList.add("ow3-widget");
   if (kind === "check") { renderCheckBox(el, node, f, px, ctx, abs); return; }
   const stateNames = stateLayerNames(f);
   const baseName = strProp(f, "ControlBackdrop");
@@ -753,12 +754,11 @@ function renderCheckBox(
  * it. It starts HIDDEN (`.fdf-highlight` in style.css) — nothing in the FDF says when it lights
  * up, so that is its screen's to say, by putting `fdf-highlight-on` on the element.
  */
-function paintHighlight(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
+function paintHighlight(el: HTMLElement, f: FdfFrame, _ctx: RenderCtx): void {
   el.classList.add("fdf-highlight");
   const type = (strProp(f, "HighlightType") ?? "SHADE").toUpperCase();
   if (type === "FILETEXTURE") {
-    const art = texture(f, "HighlightAlphaFile", ctx);
-    if (art) el.style.background = `url(${art.toDataURL()}) center/100% 100% no-repeat`;
+    el.classList.add("ow3-highlight");
     return;
   }
   const c = firstProp(f, "HighlightColor")?.args ?? [];
@@ -768,6 +768,10 @@ function paintHighlight(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
 
 /** Composite a named HIGHLIGHT frame's alpha file as a full-box overlay layer. */
 function appendCheck(el: HTMLElement, f: FdfFrame, name: string | undefined, cls: string, ctx: RenderCtx): void {
+  if (name) {
+    el.classList.add("ow3-check");
+    return;
+  }
   const highlight = name ? findByName(f, name) : undefined;
   const raw = highlight ? texture(highlight, "HighlightAlphaFile", ctx) : null;
   if (!raw) return;
@@ -895,6 +899,7 @@ function renderButtonLayers(
   ctx: RenderCtx,
   abs: { left: number; top: number },
 ): void {
+  el.classList.add("ow3-button");
   const baseName = strProp(f, "ControlBackdrop");
   const pushedName = strProp(f, "ControlPushedBackdrop");
   const stateNames = stateLayerNames(f);
@@ -961,16 +966,8 @@ function stateLayerNames(f: FdfFrame): Set<string> {
   return names;
 }
 
-/** Paint a BACKDROP's chrome into `el` as a background canvas. */
-function paintBackdrop(el: HTMLElement, f: FdfFrame, px: { width: number; height: number }, ctx: RenderCtx): void {
-  const canvas = compositeBackdrop(f, Math.round(px.width), Math.round(px.height), ctx);
-  if (!canvas) return;
-  canvas.style.position = "absolute";
-  canvas.style.inset = "0";
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  canvas.style.pointerEvents = "none";
-  el.insertBefore(canvas, el.firstChild);
+function paintBackdrop(el: HTMLElement, _f: FdfFrame, _px: { width: number; height: number }, _ctx: RenderCtx): void {
+  el.classList.add("ow3x-panel");
 }
 
 /** A frame's texture name → a real BLP path. A frame flagged `DecorateFileNames` names
@@ -983,176 +980,8 @@ function texture(f: FdfFrame, key: string, ctx: RenderCtx): HTMLCanvasElement | 
   return ctx.blpCanvas(hasFlag(f, "DecorateFileNames") ? ctx.lib.decorate(name) : name);
 }
 
-/** Compose a WC3 backdrop (BlendAll single-stretch, or 9-slice edge/corner) to a canvas. */
-function compositeBackdrop(f: FdfFrame, w: number, h: number, ctx: RenderCtx): HTMLCanvasElement | null {
-  if (w < 1 || h < 1) return null;
-  const bg = texture(f, "BackdropBackground", ctx);
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const g = canvas.getContext("2d");
-  if (!g) return null;
-  g.imageSmoothingEnabled = true;
-
-  // BackdropBlendAll is NOT "stretch one texture and stop" — the frames that carry it still
-  // name an edge file and still tile (the map list's own StandardEditBoxBackdropTemplate does
-  // both), and taking it as a short-circuit is what left the Game Settings list a bare dark
-  // rectangle with no frame around it. Every backdrop composes the same way; a frame with no
-  // edge file simply has no border to draw, which is the ornate menu buttons' case.
-
-  // 9-slice: interior background + edge-file border. cornerSize/backgroundSize are in
-  // 0.8×0.6 world units; scale them to pixels with the same factor as the layout.
-  const cornerPx = Math.max(2, Math.round((prop(f, "BackdropCornerSize") ?? 0.012) * ctx.fit.scale));
-  const inset = backgroundInsets(f, ctx.fit.scale);
-  const edge = texture(f, "BackdropEdgeFile", ctx);
-
-  if (bg) {
-    // Fill the (inset) interior. With BackdropTileBackground the background tiles
-    // (the dark button face); without it the background is a single image stretched
-    // to fill (an icon like the search-region magnifying glass), so it fits its
-    // container instead of tiling/cropping at native pixels.
-    // (A face whose alpha channel is entirely dead — the night elf / undead button
-    // backgrounds — was already made opaque by the loader above, and CANNOT be repaired here:
-    // a canvas stores premultiplied pixels, so by this point the colour is already black.
-    // See reviveDeadAlpha in render/blputil.ts.)
-    const ix = inset.left, iy = inset.top;
-    const iw = Math.max(0, w - inset.left - inset.right), ih = Math.max(0, h - inset.top - inset.bottom);
-    if (f.props.some((p) => p.key === "BackdropTileBackground")) {
-      const bgSizeWorld = prop(f, "BackdropBackgroundSize");
-      const tileW = bgSizeWorld ? bgSizeWorld * ctx.fit.scale : bg.width;
-      const tileH = bgSizeWorld ? bgSizeWorld * ctx.fit.scale : bg.height;
-      // A tile at least as big as the interior is not a PATTERN — it is one face, and the
-      // insets are what pulled the interior in from the frame's own size. Fit it, exactly as
-      // an untiled background is fitted below.
-      //
-      // The campaign chapter buttons are the case that proves it: CampaignArrowButtonTemplate
-      // is 0.032 square, its backdrop declares `BackdropBackgroundSize 0.032` — one tile the
-      // size of the whole button — and `BackdropBackgroundInsets 0.007` on every side, leaving
-      // an 0.018 interior for the border to sit around. Tiling that draws the 32×32 face at
-      // 0.032 anchored to the interior's TOP-LEFT and clips away the rest, so the arrow (which
-      // is centred in its own art) ends up shoved up and left inside its frame. Fitting puts it
-      // back in the middle, which is where the reference has it.
-      if (tileW >= iw && tileH >= ih) {
-        g.drawImage(bg, ix, iy, iw, ih);
-      } else {
-        g.save();
-        g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
-        // Most tiled backgrounds are MEANT to be see-through — the map list, the tooltips, the
-        // campaign chapter rows are all a translucent wash over whatever is behind them, and
-        // painting a plate under every one of them flattened the lot. Only a frame that asks
-        // (see OPAQUE_BACKDROP) gets one, and then only inside the inset, so a border ornament
-        // that hangs past the background still hangs over open screen.
-        if (hasFlag(f, OPAQUE_BACKDROP)) {
-          g.fillStyle = "#000";
-          g.fillRect(ix, iy, iw, ih);
-        }
-        // ONE repeating pattern, never a drawImage per tile. A tile is a fractional number of
-        // pixels wide (0.032 world units is not a whole pixel at any real scale), and each
-        // separately smoothed drawImage blends its own edge texels against the transparency
-        // OUTSIDE the image — so every tile border came out a thin translucent line, a faint
-        // grid over the map list and every dropdown. A pattern samples ACROSS the seam (it
-        // wraps), which is how the engine's own tiled quad reads it.
-        const pattern = g.createPattern(bg, "repeat");
-        if (pattern) {
-          pattern.setTransform(new DOMMatrix().translateSelf(ix, iy).scaleSelf(tileW / bg.width, tileH / bg.height));
-          g.fillStyle = pattern;
-          g.fillRect(ix, iy, iw, ih);
-        }
-        g.restore();
-      }
-    } else {
-      g.drawImage(bg, ix, iy, iw, ih);
-    }
-  }
-
-  if (edge) {
-    // BackdropCornerFlags names WHICH edges and corners of the border actually draw. Every
-    // panel we mounted before this declared all eight ("UL|UR|BL|BR|T|L|B|R"), so ignoring the
-    // property cost nothing — but the cinematic letterbox declares only its INNER edge
-    // ("UL|UR|T" on the bottom bar, "BL|BR|B" on the top one), because the other three sides
-    // run off the screen. Draw all eight there and the bars get a decorative frame around a
-    // void.
-    const flags = strProp(f, "BackdropCornerFlags");
-    const on = (name: string): boolean => !flags || flags.split("|").includes(name);
-    const ts = edge.height; // tile size in source px (square tiles)
-    const tile = (idx: number, dx: number, dy: number, dw: number, dh: number, rot = 0): void => {
-      g.save();
-      g.translate(dx + dw / 2, dy + dh / 2);
-      if (rot) g.rotate((rot * Math.PI) / 180);
-      const [ww, hh] = rot % 180 === 0 ? [dw, dh] : [dh, dw];
-      g.drawImage(edge, idx * ts, 0, ts, ts, -ww / 2, -hh / 2, ww, hh);
-      g.restore();
-    };
-    const c = cornerPx;
-
-    /**
-     * An edge REPEATS its tile along the run; it does not stretch to fill it.
-     *
-     * `BackdropCornerSize` is the tile's size, and it is the only size the tile is ever drawn
-     * at — that is what makes a border look the same on a 200 px button and a 1900 px letterbox
-     * bar. Stretching instead smears one 64 px tile across the whole run, which on the small
-     * frames this was first tuned against passed for a border and on the cinematic bars did
-     * not: the real panel's top edge is a row of evenly spaced metal clasps and its bottom
-     * edge a run of leaves, and ours was a single clasp and a single leaf pulled the width of
-     * the screen (issue: cinematic HUD doesn't match the original).
-     *
-     * The last tile is CLIPPED rather than squeezed, for the same reason: a partial repeat is
-     * what the run is short by, and rescaling the final tile to fit would put a different-sized
-     * ornament at one end of every bar.
-     *
-     * `across` is the run's direction and is passed EXPLICITLY rather than inferred from `rot`.
-     * The two are usually the same thing — a top edge is a horizontal run of a quarter-turned
-     * side strip — but not always: a bar paves its run with its own end-cap art, which is
-     * already horizontal and needs no turn at all (see below). Deriving one from the other laid
-     * that case out down the screen instead of across it.
-     */
-    const edgeRun = (idx: number, dx: number, dy: number, run: number, rot: number, across: "x" | "y"): void => {
-      if (run <= 0) return;
-      g.save();
-      g.beginPath();
-      g.rect(dx, dy, across === "x" ? run : c, across === "x" ? c : run);
-      g.clip();
-      for (let at = 0; at < run; at += c) {
-        if (across === "x") tile(idx, dx + at, dy, c, c, rot);
-        else tile(idx, dx, dy + at, c, c, rot);
-      }
-      g.restore();
-    };
-
-    // Edges (tiles 2/3 are vertical strips in the source → rotate for top/bottom).
-    if (on("L")) edgeRun(EDGE_TILE.L, 0, c, h - 2 * c, 0, "y");
-    if (on("R")) edgeRun(EDGE_TILE.R, w - c, c, h - 2 * c, 0, "y");
-    if (on("T")) edgeRun(EDGE_TILE.T, c, 0, w - 2 * c, 90, "x");
-    if (on("B")) edgeRun(EDGE_TILE.B, c, h - c, w - 2 * c, 90, "x");
-    // Corners.
-    if (on("UL")) tile(EDGE_TILE.UL, 0, 0, c, c);
-    if (on("UR")) tile(EDGE_TILE.UR, w - c, 0, c, c);
-    if (on("BL") || on("LL")) tile(EDGE_TILE.LL, 0, h - c, c, c);
-    if (on("BR") || on("LR")) tile(EDGE_TILE.LR, w - c, h - c, c, c);
-  }
-
-  return hasFlag(f, "BackdropMirrored") ? mirrored(canvas) : canvas;
-}
-
-/**
- * `BackdropMirrored` — the finished backdrop, flipped left-to-right.
- *
- * The ornate menu bases are ONE asymmetric picture (`StandardMenuButtonBaseBackdrop` is
- * GlueScreen-Button1-Border.blp stretched, no tiling and no edge file): a fleur end at the
- * left, plain plate to the right, and the widget sits in the plate. A widget that fills its
- * base from the LEFT instead — every pulldown on the Options screen, which anchors its
- * POPUPMENU TOPLEFT inside a 0.256-wide base — needs that picture the other way round, and
- * the file says so with this flag. Ignored, the fleur is drawn underneath the dropdown where
- * nothing can see it and the base's right quarter reads as an empty dark strip.
- */
-function mirrored(src: HTMLCanvasElement): HTMLCanvasElement {
-  const out = document.createElement("canvas");
-  out.width = src.width; out.height = src.height;
-  const g = out.getContext("2d");
-  if (!g) return src;
-  g.translate(src.width, 0);
-  g.scale(-1, 1);
-  g.drawImage(src, 0, 0);
-  return out;
+function compositeBackdrop(_f: FdfFrame, _w: number, _h: number, _ctx: RenderCtx): HTMLCanvasElement | null {
+  return null;
 }
 
 /** A referenced template, wearing the referrer's `DecorateFileNames` if it has one of its
@@ -1195,6 +1024,7 @@ function textureImage(f: FdfFrame, ctx: RenderCtx): string | null {
 /** Paint a `Texture` frame — an image element in its own right (the console's tiles, the
  *  resource bar's gold/lumber/supply icons), not a backdrop behind something else. */
 function paintTexture(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
+  if (!gameplayIcon(strProp(f, "File") ?? "")) return;
   const art = textureImage(f, ctx);
   if (!art) return;
   el.style.background = `url(${art}) center/100% 100% no-repeat`;
@@ -1309,29 +1139,8 @@ function wireButton(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
 }
 
 /** Append the mouse-over highlight (ControlMouseOverHighlight → HighlightAlphaFile). */
-function appendGlow(el: HTMLElement, f: FdfFrame, ctx: RenderCtx): void {
-  const highlightName = strProp(f, "ControlMouseOverHighlight");
-  const highlight = highlightName ? findByName(f, highlightName) : undefined;
-  const highCanvas = highlight ? texture(highlight, "HighlightAlphaFile", ctx) : null;
-  if (!highCanvas) return;
-  const glow = document.createElement("div");
-  glow.className = "fdf-button-glow";
-  glow.style.background = `url(${glowUrl(highCanvas)}) center/100% 100% no-repeat`;
-  el.appendChild(glow);
-}
-
-/**
- * The glow's image, ONCE per decoded texture. Every button on a screen wears the same one or
- * two highlight files, and re-encoding them on every build — a PNG per button — was most of
- * what a rebuild cost: two thirds of the half second the Custom Game screen stalled for each
- * time its map list re-filled under the search box. The source canvas is the screen's cached
- * decode (`blpCanvas`), so it is the same object build after build and keys this exactly.
- */
-const glowUrls = new WeakMap<HTMLCanvasElement, string>();
-function glowUrl(src: HTMLCanvasElement): string {
-  let url = glowUrls.get(src);
-  if (url === undefined) glowUrls.set(src, (url = intensityAsAlpha(src).toDataURL()));
-  return url;
+function appendGlow(el: HTMLElement, _f: FdfFrame, _ctx: RenderCtx): void {
+  el.classList.add("ow3-hoverable");
 }
 
 /**
@@ -1509,35 +1318,6 @@ function rgba(args: { n: number | null }[]): string {
   const c = (i: number) => Math.round((args[i]?.n ?? 0) * 255);
   const a = args[3]?.n ?? 1;
   return `rgba(${c(0)}, ${c(1)}, ${c(2)}, ${a})`;
-}
-
-function prop(f: FdfFrame, key: string): number | undefined {
-  return firstProp(f, key)?.args[0]?.n ?? undefined;
-}
-
-/**
- * `BackdropBackgroundInsets` — how far the interior pulls back from each side, in pixels.
- *
- * All FOUR values, which matters exactly twice in the whole game and both times on the thing
- * that reported it. Every other backdrop in every shipped FDF declares the four the same
- * (`0.004 0.004 0.004 0.004` and friends), so reading only the first passed everywhere — but
- * the two cinematic letterbox bars are asymmetric, and they are asymmetric on purpose:
- *
- *     CinematicBottomBorder   0.0 0.01 0.0 0.0     ornament along its TOP
- *     CinematicTopBorder      0.0 0.0 0.01 0.0     ornament along its BOTTOM
- *
- * Each bar pulls its background back from the side its border ornament sits on, so the
- * ornament hangs over open screen rather than over its own stone — which is what lets the
- * night elf bar's leaves cover the panel edge instead of stopping a hair short of it. That
- * pairing is also the only evidence there is for the ORDER: slots 2 and 3 are the top and the
- * bottom, because that is the only reading under which both declarations do the same sensible
- * thing. (Slots 1 and 4 are then left and right; nothing in the game distinguishes them, and
- * nothing in the game sets them differently either.)
- */
-function backgroundInsets(f: FdfFrame, scale: number): { left: number; top: number; bottom: number; right: number } {
-  const args = firstProp(f, "BackdropBackgroundInsets")?.args ?? [];
-  const at = (i: number): number => (args[i]?.n ?? 0) * scale;
-  return { left: at(0), top: at(1), bottom: at(2), right: at(3) };
 }
 
 /** Find a named sub-frame anywhere under `f` (for Control* backdrop references). */

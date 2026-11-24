@@ -3,6 +3,7 @@ import { asInt, asNum, asStr, jBool, jHandle, jInt, jStr, JNULL, truthy, type Ja
 import { FdfLibrary } from "../ui/fdf/library";
 import type { FdfFrame } from "../ui/fdf/parser";
 import type { DataSource } from "../vfs/types";
+import { decodeWar3Text } from "../vfs/textEncoding";
 
 // The 1.31 custom-UI FRAME API (docs/map-compatibility.md, step 5b).
 //
@@ -177,12 +178,12 @@ export function registerFrameNatives(rt: Runtime): void {
     const toc = read(path);
     if (!toc) return jBool(false);
     const m = model(c);
-    for (const line of new TextDecoder("latin1").decode(toc).split(/\r?\n/)) {
+    for (const line of decodeWar3Text(toc).split(/\r?\n/)) {
       const fdf = line.trim();
       if (!fdf || m.sources.some((s) => s.id === fdf)) continue;
       const bytes = read(fdf);
       if (!bytes) continue;
-      const text = new TextDecoder("latin1").decode(bytes);
+      const text = decodeWar3Text(bytes);
       m.lib.loadOverride(fdf, text);
       m.sources.push({ id: fdf, text });
     }
